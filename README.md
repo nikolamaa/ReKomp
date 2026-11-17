@@ -17,6 +17,8 @@ Hosting je besplatan: kod je na **GitHub Pages**, podaci u bazi **Supabase** (be
 7. Na kartici **Sekcije** biraš šta klijent vidi. Aplikacija sama predloži sekcije za koje je klijent dao podatke (npr. ako je preskočio ishranu, nema sekcije Ishrana). Kasnije, kad dobiješ podatke, uključiš sekciju i dopuniš plan.
 8. Klijent svakodnevno unosi težinu, san, bol, struk, kilaže po serijama. Ti to vidiš na kartici **Unosi** (nedeljni proseci, dnevna tabela, treninzi).
 
+Na dan sa treningom klijent može da izabere **Lakši dan**: lakši trening (serija manje, više ponavljanja u rezervi), šetnju i mobilnost ili pomeranje treninga na sutra. Razlog se ne pita; ti na kartici **Unosi** vidiš samo da je dan bio lakši.
+
 Poruke klijentu dodaješ na kartici **Plan** (deo **Poruke od trenera**). Pojavljuju se klijentu na ekranu Danas.
 
 ---

@@ -1,6 +1,6 @@
 // Klijentska strana: Danas, Trening, Ishrana, Kalendar, Napredak, Plan, Profil.
 // Sekcija se prikazuje samo ako je uključena i plan za nju ima sadržaj.
-import { $, qsa, esc, ymd, parseYmd, addDays, monday, weekdayKey, num, f1, fnum, hm, fmtMin, nowHM, lsGet, lsSet, lsDel, isStandalone, isIOS } from "./util.js";
+import { $, qsa, esc, ymd, parseYmd, addDays, monday, weekdayKey, num, f1, fnum, hm, fmtMin, nowHM, lsGet, lsSet, lsDel, isStandalone, isIOS, toast } from "./util.js";
 import { t, getLang, fmtShortDate, fmtLongDate, fmtRange, dayLong, langSelectHtml } from "./i18n.js";
 
 var COLORS = ["blue", "red", "green", "amber", "violet"];
@@ -110,6 +110,29 @@ export function mountClient(root, ctx) {
   function wTitle(code) { return WK[code] ? WK[code].title || code : code; }
   function wColor(code) { return WK[code] ? WK[code]._color : "blue"; }
 
+  /* ---------- lakši dan ---------- */
+  // Klijent sam bira: light (lakši trening), walk (šetnja i mobilnost), move (pomeri na sutra). Razlog se ne pita.
+  function planned(day) { var e = dayEntry(day); return e && e.workout && WK[e.workout] ? e : null; }
+  function trainOf(day) {
+    var d = S.daily[day] || {}, e = planned(day);
+    if (e) return { code: e.workout, time: e.time, note: e.note, easy: d.easy && d.easy !== "move" ? d.easy : null, away: d.easy === "move" };
+    var y = addDays(day, -1), ye = planned(y);
+    if (ye && (S.daily[y] || {}).easy === "move") return { code: ye.workout, time: ye.time, easy: d.easy && d.easy !== "move" ? d.easy : null, movedIn: true };
+    return null;
+  }
+  function canMove(day) { var tr = trainOf(day); return !!(tr && !tr.movedIn && !planned(addDays(day, 1))); }
+  function easyHtml(day, tr) {
+    if (tr.easy || tr.away) {
+      var lbl = tr.away ? t("easy_moved_away") : (tr.easy === "walk" ? t("easy_walk") : t("easy_light"));
+      return '<div class="easy-on"><span class="badge warnb">' + esc(t("easy_day")) + ": " + esc(lbl) + "</span>" +
+        (ctx.readonly ? "" : '<button type="button" class="linkbtn" data-easy="" data-day="' + day + '">' + esc(t("easy_undo")) + "</button>") + "</div>";
+    }
+    if (ctx.readonly) return "";
+    function opt(v, a, b) { return '<button type="button" class="easy-opt" data-easy="' + v + '" data-day="' + day + '"><b>' + esc(t(a)) + "</b><span>" + esc(t(b)) + "</span></button>"; }
+    return '<details class="easy"><summary>' + esc(t("easy_day")) + '</summary><p class="small muted">' + esc(t("easy_hint")) + '</p><div class="easy-opts">' +
+      opt("light", "easy_light", "easy_light_sub") + opt("walk", "easy_walk", "easy_walk_sub") + (canMove(day) ? opt("move", "easy_move", "easy_move_sub") : "") + "</div></details>";
+  }
+
   /* ---------- shell ---------- */
   function tabBtn(k) {
     var main = k === "today";
@@ -181,9 +204,13 @@ export function mountClient(root, ctx) {
       if (m.at == null) return;
       items.push({ at: m.at, o: 2, kind: "meal", key: m.key, title: m.name, sub: m.what, alts: m.alts, tip: m.tip, protein: m.protein });
     });
-    if (e.workout && WK[e.workout] && on("training")) {
-      var at = hm(e.time) != null ? hm(e.time) : hm(r.trainingAt), w = WK[e.workout];
-      if (at != null) items.push({ at: at, o: 1, kind: "train", color: w._color, code: e.workout, title: t("training_word") + ": " + (w.title || e.workout), sub: [w.focus, w.duration].filter(Boolean).join(" · ") + (e.note ? ". " + e.note : "") });
+    var tr = on("training") ? trainOf(day) : null;
+    if (tr && !tr.away) {
+      var at = hm(tr.time) != null ? hm(tr.time) : hm(r.trainingAt), w = WK[tr.code];
+      var ttl = tr.easy === "walk" ? t("easy_walk") : t("training_word") + ": " + (w.title || tr.code) + (tr.easy === "light" ? " · " + t("easy_light_tag") : "");
+      var sub = tr.easy === "walk" ? t("easy_walk_sub") : (tr.easy === "light" ? t("easy_light_sub") : [w.focus, w.duration].filter(Boolean).join(" · ") + (tr.note ? ". " + tr.note : ""));
+      if (tr.movedIn) sub = t("easy_moved_in") + ". " + sub;
+      if (at != null) items.push({ at: at, o: 1, kind: "train", color: w._color, code: tr.code, title: ttl, sub: sub });
     }
     if (e.cook && hm(r.cookAt) != null && on("nutrition")) {
       var rc = REC[e.cook];
@@ -215,21 +242,23 @@ export function mountClient(root, ctx) {
     } else if (items.length) {
       h += '<div class="next"><div class="bar b-violet"></div><div class="next-body"><span class="next-title">' + esc(t("day_done")) + '</span><span class="muted">' + esc(t("day_done_text")) + "</span></div></div>";
     }
-    if (e && e.workout && WK[e.workout] && on("training") && !(nextIdx >= 0 && items[nextIdx].kind === "train")) {
-      var done = sessionDone(S.sessions[day + "_" + e.workout]);
-      h += '<div class="row"><span class="badge t-' + wColor(e.workout) + '">' + esc(t("today_word")) + ": " + esc(wTitle(e.workout)) + (e.time ? " " + esc(e.time) : "") + "</span>" +
-        (done ? '<span class="badge ok">' + esc(t("logged")) + "</span>" : '<button class="btn ghost small" type="button" data-open="' + esc(e.workout) + '">' + esc(t("open_training")) + "</button>") + "</div>";
-    } else if (!items.length && e && !e.workout) {
+    var tr = on("training") ? trainOf(day) : null;
+    if (tr && !tr.away && !(nextIdx >= 0 && items[nextIdx].kind === "train")) {
+      var done = sessionDone(S.sessions[day + "_" + tr.code]);
+      h += '<div class="row"><span class="badge t-' + wColor(tr.code) + '">' + esc(t("today_word")) + ": " + esc(wTitle(tr.code)) + (tr.time ? " " + esc(tr.time) : "") + "</span>" +
+        (done ? '<span class="badge ok">' + esc(t("logged")) + "</span>" : '<button class="btn ghost small" type="button" data-open="' + esc(tr.code) + '">' + esc(t("open_training")) + "</button>") + "</div>";
+    } else if (!items.length && e && !tr) {
       h += '<div class="next"><div class="bar"></div><div class="next-body"><span class="next-title">' + esc(t("rest_day")) + "</span>" + (e.note ? '<span class="muted">' + esc(e.note) + "</span>" : "") + "</div></div>";
     } else if (!items.length && !e) {
       h += '<p class="muted">' + esc(t("nothing_here")) + "</p>";
     }
     if (e && e.note && items.length && !(nextIdx >= 0 && items[nextIdx].kind === "train")) h += '<p class="small">' + esc(e.note) + "</p>";
     var slp = num(d.sleep);
-    if (CI.sleep && slp != null && e && e.workout) h += slp < 5 ? '<div class="hint bad">' + esc(t("sleep_bad")) + "</div>" : (slp < 6.5 ? '<div class="hint warn">' + esc(t("sleep_warn", { x: f1(slp) })) + "</div>" : '<div class="hint ok">' + esc(t("sleep_ok", { x: f1(slp) })) + "</div>");
+    if (tr) h += easyHtml(day, tr);
+    if (CI.sleep && slp != null && tr && !tr.away && !tr.easy) h += slp < 5 ? '<div class="hint bad">' + esc(t("sleep_bad")) + "</div>" : (slp < 6.5 ? '<div class="hint warn">' + esc(t("sleep_warn", { x: f1(slp) })) + "</div>" : '<div class="hint ok">' + esc(t("sleep_ok", { x: f1(slp) })) + "</div>");
     if (CI.pain && num(d.pain) != null && num(d.pain) > 3) h += '<div class="hint bad">' + esc(t("pain_bad", { x: d.pain })) + "</div>";
-    var td = addDays(day, 1), te = dayEntry(td);
-    if (te) h += '<div class="tomorrow"><b>' + esc(t("tomorrow")) + ":</b> " + esc(shiftLabel(td)) + (te.workout && WK[te.workout] ? ", " + esc(wTitle(te.workout)) + (te.time ? " " + esc(te.time) : "") : ", " + esc(t("no_training"))) + (te.note ? ". " + esc(te.note) : "") + "</div>";
+    var td = addDays(day, 1), te = dayEntry(td), tt = trainOf(td);
+    if (te || tt) h += '<div class="tomorrow"><b>' + esc(t("tomorrow")) + ":</b> " + esc(shiftLabel(td)) + (tt && !tt.away ? ", " + esc(wTitle(tt.code)) + (tt.time ? " " + esc(tt.time) : "") + (tt.movedIn ? " (" + esc(t("easy_moved_in")) + ")" : "") : ", " + esc(t("no_training"))) + (te && te.note ? ". " + esc(te.note) : "") + "</div>";
     $("hero").innerHTML = h;
 
     // raspored
@@ -262,6 +291,13 @@ export function mountClient(root, ctx) {
     renderCheckin();
   }
   root.addEventListener("click", function (e) {
+    var eb = e.target.closest && e.target.closest("[data-easy]");
+    if (eb && !ctx.readonly) {
+      var eday = eb.dataset.day, ev = eb.dataset.easy || null;
+      writeDaily(eday, { easy: ev }).then(function () { toast(t(ev ? "easy_saved" : "easy_removed")); }, function () { toast(t("not_saved")); });
+      renderDanas(); if (S.trCode) renderTrForm(true);
+      return;
+    }
     var b = e.target.closest && e.target.closest("[data-open]"); if (!b) return;
     selectWorkout(b.dataset.open, activeDay()); go("training");
   });
@@ -461,13 +497,16 @@ export function mountClient(root, ctx) {
     if (!force && key === S.trKey && (S.trDirty || (document.activeElement && document.activeElement.closest && document.activeElement.closest("#v-training")))) return;
     S.trKey = key;
     qsa("#wkSeg button", root).forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.code === S.trCode ? "true" : "false"); });
-    var w = WK[S.trCode], e = dayEntry(S.trDate);
+    var w = WK[S.trCode], e = dayEntry(S.trDate), trd = trainOf(S.trDate), ez = trd && trd.code === S.trCode && !trd.away ? trd.easy : null;
     if (!w) { $("trList").innerHTML = '<div class="card"><p class="muted">' + esc(t("nothing_here")) + "</p></div>"; return; }
     $("trHead").innerHTML = '<span class="label">' + esc(fmtLongDate(parseYmd(S.trDate))) + (shiftLabel(S.trDate) ? " · " + esc(shiftLabel(S.trDate)) : "") + '</span><span class="big c-' + w._color + '">' + esc(w.title || w.code) + "</span>" +
-      '<span class="muted small">' + esc([w.focus, w.duration].filter(Boolean).join(" · ")) + "</span>" + (e && e.workout === S.trCode && e.note ? '<span class="small">' + esc(e.note) + "</span>" : "");
+      '<span class="muted small">' + esc([w.focus, w.duration].filter(Boolean).join(" · ")) + "</span>" + (e && e.workout === S.trCode && e.note ? '<span class="small">' + esc(e.note) + "</span>" : "") +
+      (ez ? '<div class="hint warn">' + esc(t(ez === "walk" ? "easy_walk_tr" : "easy_light_tr")) + "</div>" : "");
     var saved = S.sessions[key], draft = ctx.readonly ? null : lsGet("rekomp-draft-" + ctx.clientId + "-" + key), src = draft || saved || null;
     var html = (w.exercises || []).map(function (ex, i) {
-      var n = setCount(ex), cur = setsOf(src, ex.name) || [], last = lastSession(ex.name), prev = last ? setsOf(last, ex.name) || [] : [];
+      var n = setCount(ex), cur = setsOf(src, ex.name) || [];
+      if (ez === "light" && ex.kind !== "time" && n > 1) n = Math.max(n - 1, cur.length);
+      var last = lastSession(ex.name), prev = last ? setsOf(last, ex.name) || [] : [];
       var meta = [ex.sets, ex.rir ? t("rir") + " " + ex.rir : "", ex.rest].filter(Boolean).map(function (m) { return "<span>" + esc(m) + "</span>"; }).join("");
       var rows = "";
       for (var s = 0; s < n; s++) {
@@ -494,7 +533,7 @@ export function mountClient(root, ctx) {
   }
   function defaultWorkout() {
     var d = activeDay();
-    for (var i = 0; i < 14; i++) { var e = dayEntry(addDays(d, i)); if (e && e.workout && WK[e.workout]) return e.workout; }
+    for (var i = 0; i < 14; i++) { var tr = trainOf(addDays(d, i)); if (tr && !tr.away) return tr.code; }
     return WORKOUTS[0] ? WORKOUTS[0].code : null;
   }
 
@@ -706,7 +745,7 @@ export function mountClient(root, ctx) {
   }
   loadData();
   S.timer = setInterval(function () {
-    if (S.view === "danas" && !S.ciDirty && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#checkin"))) renderDanas();
+    if (S.view === "danas" && !S.ciDirty && !root.querySelector("#hero details.easy[open]") && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#checkin"))) renderDanas();
   }, 60000);
   function onVis() { if (document.visibilityState === "hidden" && saveTimer) flushSession(false); }
   document.addEventListener("visibilitychange", onVis);

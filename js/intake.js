@@ -133,6 +133,17 @@ export var SECTIONS = [
         O("no", "Ništa od toga", "None of these", "Ничего из этого"), O("pregnant", "Trudna sam", "I am pregnant", "Я беременна"),
         O("postpartum", "Do godinu dana posle porođaja", "Up to a year after giving birth", "До года после родов"),
         O("breastfeeding", "Dojim", "I am breastfeeding", "Кормлю грудью"), O("planning", "Planiram trudnoću", "Planning a pregnancy", "Планирую беременность")] },
+      { id: "cycle_effect", type: "single", showIf: { f: "sex", eq: "female" },
+        label: L("Da li i kako menstruacija utiče na tvoje treninge? (nije obavezno da odgovoriš)", "Does your period affect your training, and how? (you don't have to answer)", "Влияют ли месячные на твои тренировки и как? (отвечать не обязательно)"),
+        help: L("Pomaže da plan bude realan tih dana. U aplikaciji uvek imaš dugme „Lakši dan“, bez objašnjavanja zašto.", "It helps keep the plan realistic on those days. The app always has a “Lighter day” button, no explanation needed.", "Помогает сделать план реалистичным в эти дни. В приложении всегда есть кнопка «Лёгкий день», без объяснений."),
+        options: [
+          O("none", "Ne utiče", "It doesn't", "Не влияют"),
+          O("little", "Malo, treniram normalno", "A little, I train as usual", "Немного, тренируюсь как обычно"),
+          O("lighter", "Tih dana treniram lakše", "I train lighter on those days", "В эти дни тренируюсь легче"),
+          O("skip", "Ponekad preskočim trening", "I sometimes skip training", "Иногда пропускаю тренировку"),
+          O("private", "Ne želim da odgovorim", "I'd rather not say", "Не хочу отвечать")] },
+      { id: "cycle_note", type: "textarea", showIf: { f: "cycle_effect", in: ["little", "lighter", "skip"] },
+        label: L("Ako želiš, napiši više: koji dani su najteži i šta ti tada prija (nije obavezno)", "If you like, tell me more: which days are hardest and what helps then (optional)", "Если хочешь, расскажи подробнее: какие дни самые тяжёлые и что тогда помогает (не обязательно)") },
       { id: "surgery_recent", type: "textarea", label: L("Operacije ili bolničko lečenje u poslednje 2 godine", "Surgery or hospital treatment in the last 2 years", "Операции или лечение в больнице за последние 2 года") },
       { id: "doctor_clearance", type: "single", label: L("Dozvola lekara za trening", "Doctor's approval for training", "Разрешение врача на тренировки"), options: [
         O("yes", "Imam dozvolu lekara", "I have a doctor's approval", "Есть разрешение врача"),

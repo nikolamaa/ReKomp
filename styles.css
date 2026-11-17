@@ -323,3 +323,15 @@ input[type="search"] { border-radius: 999px; }
   .ans { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .hdr-date { display: none; }
 }
+
+/* Lakši dan */
+.easy { margin-top: 12px; }
+.easy > summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); font-weight: 600; font-size: 0.95rem; color: var(--ink); }
+.easy > summary::-webkit-details-marker { display: none; }
+.easy > summary::after { content: "›"; transform: rotate(90deg); color: var(--muted); }
+.easy[open] > summary::after { transform: rotate(-90deg); }
+.easy-opts { display: grid; gap: 8px; margin-top: 8px; }
+.easy-opt { display: grid; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--raised); color: var(--ink); font: inherit; cursor: pointer; }
+.easy-opt span { color: var(--muted); font-size: 0.9rem; }
+.easy-opt:active { border-color: var(--accent); }
+.easy-on { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }

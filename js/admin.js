@@ -228,7 +228,7 @@ export function mountAdmin(root, ctx) {
     h += '<div class="card"><h3>' + esc(t("daily_title")) + '</h3><div class="table-wrap"><table><tr><th>' + esc(t("date")) + '</th><th class="n">kg</th><th class="n">h</th>' + (painLabel ? '<th class="n">' + esc(painLabel) + "</th>" : "") + '<th class="n">cm</th><th>' + esc(t("note")) + "</th></tr>" +
       days.slice(0, 60).map(function (r) {
         var d = r.data || {};
-        return "<tr><td>" + esc(fmtShortDate(parseYmd(r.day))) + '</td><td class="n">' + (num(d.weight) != null ? f1(num(d.weight)) : "—") + '</td><td class="n">' + (num(d.sleep) != null ? f1(num(d.sleep)) : "—") + "</td>" + (painLabel ? '<td class="n">' + (d.pain != null ? esc(d.pain) : "—") + "</td>" : "") + '<td class="n">' + (num(d.waist) != null ? f1(num(d.waist)) : "—") + "</td><td>" + esc(d.note || "") + "</td></tr>";
+        return "<tr><td>" + esc(fmtShortDate(parseYmd(r.day))) + '</td><td class="n">' + (num(d.weight) != null ? f1(num(d.weight)) : "—") + '</td><td class="n">' + (num(d.sleep) != null ? f1(num(d.sleep)) : "—") + "</td>" + (painLabel ? '<td class="n">' + (d.pain != null ? esc(d.pain) : "—") + "</td>" : "") + '<td class="n">' + (num(d.waist) != null ? f1(num(d.waist)) : "—") + "</td><td>" + (d.easy ? '<span class="badge warnb">' + esc(t("easy_day")) + ": " + esc(t(d.easy === "walk" ? "easy_walk" : d.easy === "move" ? "easy_moved_away" : "easy_light")) + "</span> " : "") + esc(d.note || "") + "</td></tr>";
       }).join("") + "</table></div></div>";
     var ss = D.sessions.slice().sort(function (a, b) { return b.day.localeCompare(a.day); });
     h += '<div class="card"><h3>' + esc(t("sessions_title")) + "</h3>" + (ss.length ? ss.slice(0, 30).map(function (s) {
