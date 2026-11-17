@@ -52,7 +52,7 @@ window.REKOMP_CONFIG = {
   appName: "ReKomp",
   supabaseUrl: "https://abcdefgh.supabase.co",
   supabaseAnonKey: "sb_publishable_...",
-  appUrl: ""   // ostavi prazno
+  appUrl: "https://rekomp.me/"
 };
 ```
 
@@ -64,11 +64,25 @@ Dok su `supabaseUrl` i `supabaseAnonKey` prazni, aplikacija radi u **demo režim
 2. **Build and deployment** → Source: **Deploy from a branch** → Branch: **main**, folder **/ (root)** → **Save**.
 3. Posle 1–2 minuta aplikacija je na `https://nikolamaa.github.io/ReKomp/`.
 
+### 3a. Sopstveni domen: rekomp.me
+
+Kod registra domena, u DNS podešavanjima za `rekomp.me`:
+
+| Tip | Ime (host) | Vrednost |
+|---|---|---|
+| A | `@` | `185.199.108.153` |
+| A | `@` | `185.199.109.153` |
+| A | `@` | `185.199.110.153` |
+| A | `@` | `185.199.111.153` |
+| CNAME | `www` | `nikolamaa.github.io` |
+
+Obriši postojeće A/CNAME zapise za `@` i `www` koje je registar sam napravio (parking strana). Fajl `CNAME` u repozitorijumu kaže GitHubu da je domen `rekomp.me`. U **Settings → Pages** posle provere DNS-a uključi **Enforce HTTPS**. Stari link `nikolamaa.github.io/ReKomp` automatski vodi na novi.
+
 Repozitorijum je javan (besplatan GitHub Pages to traži za lične naloge). U kodu nema lozinki ni podataka klijenata; podaci su u Supabase bazi i zaštićeni pravilima pristupa (Row Level Security): klijent vidi samo svoje, ti vidiš sve.
 
 ### 4. Link u Supabase
 
-**Authentication** → **URL Configuration** → **Site URL**: `https://nikolamaa.github.io/ReKomp/` → Save.
+**Authentication** → **URL Configuration** → **Site URL**: `https://rekomp.me/` → Save.
 
 ### 5. Tvoj trenerski nalog
 
