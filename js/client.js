@@ -390,7 +390,7 @@ export function mountClient(root, ctx) {
   }
   function buildTraining() {
     var v = $("v-training"); if (!on("training")) { v.innerHTML = ""; return; }
-    v.innerHTML = '<div class="card"><div class="seg" id="wkSeg" role="group" style="grid-template-columns:repeat(' + Math.min(WORKOUTS.length, 4) + ',minmax(0,1fr))">' +
+    v.innerHTML = '<div class="card"><div class="seg" id="wkSeg" role="group" style="grid-template-columns:repeat(' + (WORKOUTS.length > 3 ? 2 : Math.max(WORKOUTS.length, 1)) + ',minmax(0,1fr))">' +
       WORKOUTS.map(function (w) { return '<button type="button" data-code="' + esc(w.code) + '" data-color="' + w._color + '">' + esc(w.title || w.code) + "</button>"; }).join("") +
       '</div><div class="tr-head"><div id="trHead" class="tr-title"></div><div class="field"><label for="trDate">' + esc(t("date")) + '</label><input id="trDate" type="date"></div></div><p class="small muted">' + esc(t("sets_hint")) + "</p></div>" +
       '<div id="trList" class="view"></div>' +
