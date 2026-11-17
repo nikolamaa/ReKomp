@@ -76,16 +76,19 @@ export function mountClient(root, ctx) {
   }
   function nowMin(day) { return Math.round((Date.now() - parseYmd(day).getTime()) / 60000); }
   function menuPick(date) { var m = P.workMenu && P.workMenu[rhythmKey(date)]; return m && m.days ? (m.days[weekdayKey(date)] || null) : null; }
-  function boxFor(date) {
+  // Kutija za obrok u minutu `at`: kuvanje istog dana važi tek za obroke posle vremena kuvanja.
+  function boxFor(date, at) {
     for (var i = 0; i <= 4; i++) {
-      var e = dayEntry(addDays(date, -i));
-      if (e && e.cook) { var r = REC[e.cook]; return { name: r ? (r.short || r.name) : e.cook, frozen: i >= 3 }; }
+      var d = addDays(date, -i), e = dayEntry(d);
+      if (!e || !e.cook) continue;
+      if (i === 0 && at != null) { var rr = rhythmOf(d), ca = hm(e.cookAt || (rr && rr.cookAt)); if (ca != null && at < ca) continue; }
+      var r = REC[e.cook]; return { name: r ? (r.short || r.name) : e.cook, frozen: i >= 3 };
     }
     return null;
   }
   function mealsFor(date) {
     var r = rhythmOf(date); if (!r) return null;
-    var work = isWork(date), mp = menuPick(date), box = boxFor(date);
+    var work = isWork(date), mp = menuPick(date);
     var list = !work && r.free && Array.isArray(r.free.meals) ? r.free.meals : (r.meals || []);
     return list.map(function (m) {
       var x = { key: m.key, at: hm(m.at || m.time), time: m.time || m.at, name: m.name, what: m.what, protein: m.protein, box: !!m.box };
@@ -93,7 +96,8 @@ export function mountClient(root, ctx) {
         if (work) { x.what = mp ? mp.pick : (m.what || ""); if (mp && mp.protein) x.protein = mp.protein; x.alts = mp && mp.alts; x.tip = mp && mp.tip; }
         else { x.name = m.freeName || x.name; x.what = m.freeWhat || x.what; x.protein = m.freeProtein || x.protein; if (m.freeAt) x.at = hm(m.freeAt); x.box = !m.freeWhat; }
       }
-      if (x.box && box) x.what = t("box_of", { x: box.name }) + (box.frozen ? " (" + t("from_freezer") + ")" : "");
+      var box = x.box ? boxFor(date, x.at) : null;
+      if (box) x.what = t("box_of", { x: box.name }) + (box.frozen ? " (" + t("from_freezer") + ")" : "");
       return x;
     });
   }
