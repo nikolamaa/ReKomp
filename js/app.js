@@ -7,11 +7,16 @@ import { mountClient, brandHtml } from "./client.js";
 import { mountAdmin } from "./admin.js";
 
 var CFG = window.REKOMP_CONFIG || {};
+// Link iz e-pošte za novu lozinku: pročitaj pre nego što ga Supabase obradi.
+var URL_HASH = location.hash || "";
+var RECOVERY = /type=recovery/.test(URL_HASH);
+var LINK_ERR = /error_code=|error=access_denied/.test(URL_HASH);
 var APP = CFG.appName || "ReKomp";
 var api = createApi(CFG);
 var root = $("app");
 var current = null;   // { destroy }
-var state = { me: null, screen: null, preview: null, ownPlan: false };
+var state = { me: null, screen: null, preview: null, ownPlan: false, recovery: RECOVERY, linkErr: LINK_ERR };
+function cleanHash() { try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* ignore */ } }
 
 setLang(detectLang());
 document.title = APP;
@@ -54,9 +59,21 @@ function renderAuth(mode) {
     (mode === "signup" ? '<div class="field"><label for="aCode">' + esc(t("invite_code")) + '</label><input id="aCode" autocapitalize="characters" autocomplete="off" spellcheck="false"><p class="q-help">' + esc(t("invite_code_hint")) + "</p></div>" : "") +
     '<p id="authErr" class="form-err" role="alert" hidden></p>' +
     '<div class="actions"><button type="submit" class="btn" id="authBtn">' + esc(mode === "login" ? t("login_btn") : t("signup_btn")) + "</button></div>" +
-    (mode === "login" ? '<details class="small"><summary class="muted">' + esc(t("forgot")) + '</summary><p class="small">' + esc(t("forgot_text")) + "</p></details>" : "") +
+    (mode === "login" ? '<details class="small"' + (state.linkErr ? " open" : "") + '><summary class="muted">' + esc(t("forgot")) + "</summary>" +
+      (emailReset() ? '<p class="small">' + esc(t("forgot_text_email")) + '</p><div class="actions"><button type="button" class="btn ghost small" id="aForgot">' + esc(t("forgot_send")) + '</button></div><p id="forgotMsg" class="small" role="status" hidden></p>'
+        : '<p class="small">' + esc(t("forgot_text")) + "</p>") + "</details>" : "") +
     "</form></div></main>";
   bindDemoBar();
+  if (state.linkErr && mode === "login") { var le = $("authErr"); le.textContent = t("link_expired"); le.hidden = false; state.linkErr = false; cleanHash(); }
+  if ($("aForgot")) $("aForgot").addEventListener("click", async function () {
+    var email = $("aEmail").value.trim(), msg = $("forgotMsg");
+    msg.hidden = false; msg.className = "small";
+    if (!/^\S+@\S+\.\S+$/.test(email)) { msg.textContent = t("forgot_need_email"); msg.className = "small form-err"; $("aEmail").focus(); return; }
+    $("aForgot").disabled = true;
+    try { await api.resetPassword(email, appUrl()); msg.textContent = t("forgot_sent", { email: email }); }
+    catch (e) { msg.textContent = e.code === "rate" ? t("err_rate") : t("error_generic"); msg.className = "small form-err"; }
+    setTimeout(function () { if ($("aForgot")) $("aForgot").disabled = false; }, 60000);
+  });
   $("authLang").addEventListener("change", function () { setLang($("authLang").value, true); renderAuth(mode); });
   root.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { renderAuth(b.dataset.mode); }); });
   if ($("demoT")) $("demoT").addEventListener("click", async function () { await api.demoEnter("trainer"); boot(); });
@@ -81,6 +98,29 @@ function renderAuth(mode) {
       showErr(err.code === "bad_login" ? "err_login" : err.code === "exists" ? "err_exists" : err.code === "pw_short" ? "err_pw_short" : err.code === "bad_email" ? "err_email" : null, err.message);
     }
     function showErr(key, raw) { errEl.textContent = key ? t(key) : (t("error_generic") + (raw ? " (" + raw + ")" : "")); errEl.hidden = false; }
+  });
+}
+
+function emailReset() { return api.mode === "supabase" && !!CFG.emailReset; }
+
+/* ---------- nova lozinka (link iz e-pošte) ---------- */
+function renderNewPassword() {
+  unmount();
+  root.innerHTML = '<main class="wrap auth"><div class="auth-head"><div class="brand big-brand">' + brandHtml(APP) + "</div></div>" +
+    '<div class="card"><h2>' + esc(t("new_pw_title")) + '</h2><p class="muted">' + esc(t("new_pw_text")) + '</p><form id="npForm" novalidate>' +
+    '<div class="field"><label for="np1">' + esc(t("new_pw")) + '</label><input id="np1" type="password" autocomplete="new-password" minlength="8" required><p class="q-help">' + esc(t("password_hint")) + "</p></div>" +
+    '<div class="field"><label for="np2">' + esc(t("new_pw2")) + '</label><input id="np2" type="password" autocomplete="new-password" minlength="8" required></div>' +
+    '<p id="npErr" class="form-err" role="alert" hidden></p><div class="actions"><button class="btn" type="submit" id="npBtn">' + esc(t("new_pw_btn")) + "</button></div></form></div></main>";
+  cleanHash();
+  $("npForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var a = $("np1").value, b = $("np2").value, er = $("npErr");
+    er.hidden = true;
+    if (a.length < 8) { er.textContent = t("err_pw_short"); er.hidden = false; return; }
+    if (a !== b) { er.textContent = t("pw_mismatch"); er.hidden = false; return; }
+    $("npBtn").disabled = true;
+    try { await api.updatePassword(a); state.recovery = false; toast(t("pw_changed")); boot(); }
+    catch (err) { $("npBtn").disabled = false; er.textContent = err.code === "same_pw" ? t("pw_same") : err.code === "pw_short" ? t("err_pw_short") : t("error_generic"); er.hidden = false; }
   });
 }
 
@@ -159,6 +199,7 @@ export async function boot(keepView) {
     var me = await api.whoami();
     state.me = me;
     if (!me) { state.preview = null; setLang(detectLang()); renderAuth("login"); return; }
+    if (state.recovery) { renderNewPassword(); return; }
     if (state.preview && me.isAdmin) {
       var pv = state.preview;
       renderClient(pv.client, pv.plan, { readonly: true, onExitPreview: function () { state.preview = null; location.hash = "#/c/" + pv.id + "/plan"; boot(); } });
@@ -199,7 +240,10 @@ export async function boot(keepView) {
   } finally { booting = false; }
 }
 
-api.onAuth(function (ev) { if (ev === "SIGNED_OUT") { state.ownPlan = false; state.preview = null; } });
+api.onAuth(function (ev) {
+  if (ev === "SIGNED_OUT") { state.ownPlan = false; state.preview = null; }
+  if (ev === "PASSWORD_RECOVERY" && !state.recovery) { state.recovery = true; boot(); }
+});
 var lastHidden = 0;
 document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "hidden") { lastHidden = Date.now(); return; }

@@ -10,6 +10,8 @@ function mapAuthError(e) {
   if (m.indexOf("already registered") >= 0 || m.indexOf("already exists") >= 0) return err("exists");
   if (m.indexOf("password") >= 0 && m.indexOf("least") >= 0) return err("pw_short");
   if (m.indexOf("email") >= 0 && (m.indexOf("invalid") >= 0 || m.indexOf("valid") >= 0)) return err("bad_email");
+  if (m.indexOf("security purposes") >= 0 || m.indexOf("rate limit") >= 0 || (e && e.status === 429)) return err("rate");
+  if (m.indexOf("different from the old") >= 0 || m.indexOf("same password") >= 0) return err("same_pw");
   return err("generic", e && e.message);
 }
 
@@ -21,7 +23,7 @@ export function createApi(cfg) {
 /* ======================= Supabase ======================= */
 function supaApi(cfg) {
   var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" }
   });
   function unwrap(res) { if (res.error) throw err(res.error.code || "db", res.error.message); return res.data; }
 
@@ -42,6 +44,15 @@ function supaApi(cfg) {
       return r.data.session;
     },
     async signOut() { await sb.auth.signOut(); },
+    // Link za novu lozinku stiže e-poštom (Resend preko Supabase SMTP); vodi nazad u aplikaciju.
+    async resetPassword(email, redirectTo) {
+      var r = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo });
+      if (r.error) throw mapAuthError(r.error);
+    },
+    async updatePassword(pw) {
+      var r = await sb.auth.updateUser({ password: pw });
+      if (r.error) throw mapAuthError(r.error);
+    },
     async whoami() {
       var s = (await sb.auth.getSession()).data.session;
       if (!s) return null;
@@ -191,6 +202,8 @@ function demoApi() {
       s.users.push(u); s.session = u.id; store(s); emit("SIGNED_IN"); return { user: u };
     },
     async signOut() { var s = load(); s.session = null; store(s); emit("SIGNED_OUT"); },
+    async resetPassword() { /* demo: e-pošta se ne šalje */ },
+    async updatePassword(pw) { var s = load(), u = me(s); if (u) { u.password = pw; store(s); } },
     async whoami() {
       var s = load(), u = me(s); if (!u) return null;
       return { userId: u.id, email: u.email, isAdmin: isAdmin(s, u.id), clientId: memberOf(s, u.id) };
