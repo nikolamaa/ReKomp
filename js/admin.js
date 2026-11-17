@@ -304,6 +304,7 @@ export function mountAdmin(root, ctx) {
     var plan = D.plan, data = plan ? plan.data : null, pub = plan && plan.published;
     var text = data && Object.keys(data).length ? JSON.stringify(data, null, 2) : "";
     el.innerHTML = '<div class="card"><div class="card-h"><h3>' + esc(t("t_plan")) + '</h3><span class="badge ' + (pub ? "ok" : "") + '">' + esc(plan ? (pub ? t("plan_published") : t("plan_draft")) : t("plan_empty")) + "</span></div>" +
+      '<div class="actions"><label class="btn small" for="pFile">' + esc(t("load_file")) + '</label><input type="file" id="pFile" accept=".txt,.json,text/plain,application/json" hidden><span class="small muted">' + esc(t("load_file_hint")) + "</span></div>" +
       '<div class="field"><label for="pJson">' + esc(t("plan_json")) + '</label><textarea id="pJson" class="code" rows="14" spellcheck="false" placeholder="{ … }">' + esc(text) + '</textarea><p class="q-help">' + esc(t("plan_json_hint")) + "</p></div>" +
       '<div id="pCheck" role="status"></div>' +
       '<div class="actions"><button type="button" class="btn ghost small" id="pVal">' + esc(t("validate")) + '</button><button type="button" class="btn ghost small" id="pDraft">' + esc(t("save_draft")) + "</button>" +
@@ -328,6 +329,28 @@ export function mountAdmin(root, ctx) {
       return D.plan;
     }
     $("pVal").addEventListener("click", check);
+    // Plan iz .txt / .json fajla (dugme ili prevlačenje fajla na polje)
+    function loadFile(file) {
+      if (!file) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        var txt = String(rd.result || "").replace(/^\uFEFF/, "").trim();
+        if (/^```/.test(txt)) txt = txt.replace(/^```[a-z]*\s*/i, "").replace(/\s*```\s*$/, "");
+        $("pJson").value = txt;
+        var r = check();
+        toast(t("file_loaded", { name: file.name }));
+        $("pCheck").scrollIntoView({ behavior: "smooth", block: "center" });
+        return r;
+      };
+      rd.onerror = function () { toast(t("file_error")); };
+      rd.readAsText(file);
+    }
+    $("pFile").addEventListener("change", function () { loadFile($("pFile").files[0]); $("pFile").value = ""; });
+    $("pJson").addEventListener("dragover", function (e) { e.preventDefault(); });
+    $("pJson").addEventListener("drop", function (e) {
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+      e.preventDefault(); loadFile(e.dataTransfer.files[0]);
+    });
     $("pDraft").addEventListener("click", async function () {
       var r = check(); if (!r.ok) return;
       try { await save(r.plan, D.plan ? D.plan.published : false); toast(t("saved")); tabPlan(el, D); } catch (e) { toast(t("not_saved")); }
