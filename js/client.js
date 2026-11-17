@@ -576,7 +576,7 @@ export function mountClient(root, ctx) {
         '<div class="sl"><span class="dn">' + esc(dayLong(parseYmd(day))) + " " + parseYmd(day).getDate() + "." + (parseYmd(day).getMonth() + 1) + '.</span><span class="row">' + (prot ? '<span class="pill">~' + prot + " g</span>" : "") + '<span class="chev">›</span></span></div>' +
         '<div class="row">' + (sl ? '<span class="chip ' + shiftClass(day) + '">' + esc(sl) + "</span>" : "") + badges.join("") + '</div></summary><ul class="meals">' +
         meals.map(function (m) {
-          return '<li><span class="tm">' + esc(m.at != null ? fmtMin(m.at) : (m.time || "")) + '</span><span><span class="mn">' + esc(m.name) + '</span><br><span class="mw">' + esc(m.what) + (m.alts && m.alts.length ? " · " + esc(t("if_missing", { x: m.alts.join(", ") })) : "") + "</span></span>" + (m.protein ? '<span class="pg muted">~' + m.protein + " g</span>" : "<span></span>") + "</li>";
+          return '<li><span class="tm">' + esc(m.at != null ? fmtMin(m.at) : (m.time || "")) + '</span><span><span class="mn">' + esc(m.name) + '</span><br><span class="mw">' + esc(m.what) + (m.alts && m.alts.length ? " · " + esc(t("if_missing", { x: m.alts.join(", ") })) : "") + "</span></span>" + (m.protein ? '<span class="pg muted">~' + (Number(m.protein) || 0) + " g</span>" : "<span></span>") + "</li>";
         }).join("") + (e ? "" : '<li><span></span><span class="mw">' + esc(t("template_day")) + "</span><span></span></li>") + "</ul></details>";
     }
     $("weekDays").innerHTML = html; $("weekDays").dataset.wk = ws;
