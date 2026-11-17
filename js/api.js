@@ -79,7 +79,7 @@ function supaApi(cfg) {
     // trener
     async listClients() {
       var clients = unwrap(await sb.from("clients").select("*").order("created_at", { ascending: false }));
-      var intakes = unwrap(await sb.from("intakes").select("client_id,progress,submitted_at,updated_at,seen_by_trainer_at"));
+      var intakes = unwrap(await sb.from("intakes").select("client_id,answers,progress,submitted_at,updated_at,seen_by_trainer_at"));
       var plans = unwrap(await sb.from("plans").select("client_id,published,updated_at"));
       var since = addDays(today(), -60);
       var logs = unwrap(await sb.from("daily_logs").select("client_id,day").gte("day", since).order("day", { ascending: false }).limit(2000));
@@ -115,8 +115,34 @@ function supaApi(cfg) {
     async savePlan(cid, data, published) {
       return unwrap(await sb.from("plans").upsert({ client_id: cid, data: data, published: !!published }).select().single());
     },
-    async markSeen(cid) { unwrap(await sb.from("intakes").update({ seen_by_trainer_at: new Date().toISOString() }).eq("client_id", cid)); }
+    async markSeen(cid) { unwrap(await sb.from("intakes").update({ seen_by_trainer_at: new Date().toISOString() }).eq("client_id", cid)); },
+
+    // pregled napretka i rezervna kopija (samo trener, RLS)
+    async listPlans() { return unwrap(await sb.from("plans").select("client_id,data,published")); },
+    async listAllDaily(since) {
+      return fetchAll(function () { return sb.from("daily_logs").select("client_id,day,data").gte("day", since).order("day").order("client_id"); });
+    },
+    async listAllSessions(since) {
+      return fetchAll(function () { return sb.from("sessions").select("client_id,day,workout,data").gte("day", since).order("day").order("client_id").order("workout"); });
+    },
+    async exportAll() {
+      var T = { admins: ["user_id"], clients: ["id"], client_private: ["client_id"], client_members: ["user_id"], intakes: ["client_id"], plans: ["client_id"], daily_logs: ["client_id", "day"], sessions: ["client_id", "day", "workout"] };
+      var out = {};
+      for (var name in T) {
+        out[name] = await fetchAll(function () { var q = sb.from(name).select("*"); T[name].forEach(function (c) { q = q.order(c); }); return q; });
+      }
+      return out;
+    }
   };
+  // PostgREST vraća najviše 1000 redova po zahtevu, pa se čita u delovima.
+  async function fetchAll(make) {
+    var out = [], step = 1000;
+    for (var i = 0; i < 100000; i += step) {
+      var r = unwrap(await make().range(i, i + step - 1));
+      out = out.concat(r); if (r.length < step) break;
+    }
+    return out;
+  }
 }
 
 /* ======================= Demo (localStorage) ======================= */
@@ -248,6 +274,22 @@ function demoApi() {
       var s = load(); guardAdmin(s);
       s.plans[cid] = { client_id: cid, data: clone(data), published: !!published, updated_at: nowIso() }; store(s); return clone(s.plans[cid]);
     },
-    async markSeen(cid) { var s = load(); guardAdmin(s); if (s.intakes[cid]) { s.intakes[cid].seen_by_trainer_at = nowIso(); store(s); } }
+    async markSeen(cid) { var s = load(); guardAdmin(s); if (s.intakes[cid]) { s.intakes[cid].seen_by_trainer_at = nowIso(); store(s); } },
+    async listPlans() { var s = load(); guardAdmin(s); return Object.keys(s.plans).map(function (k) { var p = s.plans[k]; return { client_id: k, data: clone(p.data), published: p.published }; }); },
+    async listAllDaily(since) {
+      var s = load(), out = []; guardAdmin(s);
+      Object.keys(s.daily).forEach(function (cid) { Object.keys(s.daily[cid]).forEach(function (d) { if (d >= since) out.push({ client_id: cid, day: d, data: clone(s.daily[cid][d]) }); }); });
+      return out;
+    },
+    async listAllSessions(since) {
+      var s = load(), out = []; guardAdmin(s);
+      Object.keys(s.sessions).forEach(function (cid) { Object.keys(s.sessions[cid]).forEach(function (k) { var x = s.sessions[cid][k]; if (x.day >= since) out.push({ client_id: cid, day: x.day, workout: x.workout, data: clone(x.data) }); }); });
+      return out;
+    },
+    async exportAll() {
+      var s = load(); guardAdmin(s); var c = clone(s);
+      c.users = (c.users || []).map(function (u) { return { id: u.id, email: u.email }; }); delete c.session;
+      return c;
+    }
   };
 }

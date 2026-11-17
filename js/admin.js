@@ -4,6 +4,8 @@ import { t, getLang, fmtShortDate, fmtRange, inviteText, langSelectHtml, LANGS }
 import { SECTIONS, tx, fieldVisible, displayValue, isFlagged, parqPositive, sectionAnswered, defaultSections } from "./intake.js";
 import { validatePlan, claudePrompt } from "./plan-format.js";
 import { brandHtml } from "./client.js";
+import { computeInsights } from "./insights.js";
+import { FIELD_INDEX, optionLabel } from "./intake.js";
 
 var SECTION_KEYS = ["today", "training", "nutrition", "calendar", "progress", "rules", "supplements"];
 var SECTION_LABEL = { today: "sec_today", training: "sec_training", nutrition: "sec_nutrition", calendar: "sec_calendar", progress: "sec_progress", rules: "sec_rules", supplements: "sec_supplements" };
@@ -22,7 +24,7 @@ function planHas(k, p) {
 
 // ctx: { api, appName, appUrl, me, onPreview(client, plan), onOwnPlan, onLogout, onLang }
 export function mountAdmin(root, ctx) {
-  var S = { clients: [], showArchived: false, q: "", detail: null };
+  var S = { clients: [], showArchived: false, q: "", detail: null, ins: null, prWeeks: 8, prMetric: "weight", prHidden: {} };
 
   root.innerHTML = '<header class="top"><div class="wrap"><div class="brand">' + brandHtml(ctx.appName) + ' <small class="role">' + esc(t("trainer")) + '</small></div><div class="top-r">' +
     (ctx.me && ctx.me.clientId ? '<button type="button" class="icon-btn" id="aOwn">' + esc(t("my_plan")) + "</button>" : "") +
@@ -36,6 +38,7 @@ export function mountAdmin(root, ctx) {
   function route() {
     var h = (location.hash || "").replace(/^#\/?/, "").split("/");
     if (h[0] === "c" && h[1]) return openClient(h[1], h[2] || "intake");
+    if (h[0] === "napredak") return renderProgress();
     return renderList();
   }
   window.addEventListener("hashchange", route);
@@ -56,7 +59,7 @@ export function mountAdmin(root, ctx) {
       '<div class="row">' + STATUS.filter(function (s) { return counts[s]; }).map(function (s) { return '<span class="chip st-' + s + '">' + esc(t("st_" + s)) + " · " + counts[s] + "</span>"; }).join("") + "</div>" +
       '<input id="aSearch" type="search" placeholder="' + esc(t("search")) + '" aria-label="' + esc(t("search")) + '" value="' + esc(S.q) + '">' +
       '<label class="checkrow small"><input type="checkbox" id="aArch"' + (S.showArchived ? " checked" : "") + "><span>" + esc(t("show_archived")) + "</span></label></div>" +
-      '<div id="aList" class="view"></div>';
+      '<div id="aOverview"></div><div id="aList" class="view"></div>';
     $("aNew").addEventListener("click", function () { $("aNewForm").hidden = false; $("ncName").focus(); });
     $("ncCancel").addEventListener("click", function () { $("aNewForm").hidden = true; });
     $("aNewF").addEventListener("submit", async function (e) {
@@ -72,6 +75,142 @@ export function mountAdmin(root, ctx) {
     $("aSearch").addEventListener("input", function () { S.q = $("aSearch").value; drawList(); });
     $("aArch").addEventListener("change", function () { S.showArchived = $("aArch").checked; drawList(); });
     drawList();
+    drawOverview();
+  }
+
+  /* ---------- pregled i napredak ---------- */
+  var PALETTE = ["#F27F70", "#6FB7FF", "#7AD3A0", "#F2C14E", "#B79CFF", "#FF9DCB", "#5ED6D0", "#C9D36A", "#FFB077", "#9FB3C8"];
+  async function loadInsightData(force) {
+    if (S.ins && !force && Date.now() - S.ins.at < 60000) return S.ins;
+    var since = addDays(monday(today()), -7 * 12);
+    var res = await Promise.all([ctx.api.listPlans(), ctx.api.listAllDaily(since), ctx.api.listAllSessions(since)]);
+    var plans = {}; (res[0] || []).forEach(function (p) { plans[p.client_id] = p; });
+    var goals = {}; S.clients.forEach(function (c) { if (c.intake && c.intake.answers) goals[c.id] = c.intake.answers.goal_main || null; });
+    var colors = {}; S.clients.filter(function (c) { return c.status === "active"; }).sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (c, i) { colors[c.id] = PALETTE[i % PALETTE.length]; });
+    S.ins = { at: Date.now(), plans: plans, goals: goals, daily: res[1] || [], sessions: res[2] || [], colors: colors };
+    return S.ins;
+  }
+  function insights(weeks) {
+    return computeInsights({ clients: S.clients, plans: S.ins.plans, goals: S.ins.goals, daily: S.ins.daily, sessions: S.ins.sessions }, { weeks: weeks });
+  }
+  function reasonText(r) {
+    var v = Object.assign({}, r.vars);
+    if (v.x != null && typeof v.x === "number" && r.key !== "r_adherence" && r.key !== "r_pain") v.x = f1(Math.abs(v.x));
+    return t(r.key, v);
+  }
+  function statusBadge(st) { var cls = { good: "ok", watch: "warnb", bad: "bad", nodata: "" }[st]; return '<span class="badge ' + cls + '">' + esc(t("pg_" + st)) + "</span>"; }
+  async function drawOverview() {
+    var el = $("aOverview"); if (!el) return;
+    var active = S.clients.filter(function (c) { return c.status === "active"; });
+    var btns = '<div class="actions"><a class="btn small" href="#/napredak">' + esc(t("ov_progress_btn")) + '</a><button type="button" class="btn ghost small" id="aBackup">' + esc(t("ov_backup_btn")) + "</button></div>";
+    if (!active.length) { el.innerHTML = '<div class="card"><h3>' + esc(t("ov_title")) + '</h3><p class="small muted">' + esc(t("ov_none_active")) + "</p>" + btns + "</div>"; bindBackup(); return; }
+    el.innerHTML = '<div class="card"><h3>' + esc(t("ov_title")) + '</h3><p class="muted small">' + esc(t("loading")) + "</p></div>";
+    try { await loadInsightData(); } catch (e) { el.innerHTML = '<div class="card"><h3>' + esc(t("ov_title")) + '</h3><p class="small form-err">' + esc(t("error_generic")) + "</p>" + btns + "</div>"; bindBackup(); return; }
+    if (!$("aOverview")) return;
+    var R = insights(4).rows, need = R.filter(function (r) { return r.status === "bad" || r.status === "watch"; });
+    var cnt = { good: 0, watch: 0, bad: 0, nodata: 0 }; R.forEach(function (r) { cnt[r.status]++; });
+    el.innerHTML = '<div class="card"><div class="card-h"><h3>' + esc(t("ov_title")) + '</h3><span class="small muted">' + esc(t("ov_last_weeks", { n: 4 })) + "</span></div>" +
+      '<div class="row">' + ["bad", "watch", "good", "nodata"].filter(function (k) { return cnt[k]; }).map(function (k) { return statusBadge(k).replace("</span>", " · " + cnt[k] + "</span>"); }).join("") + "</div>" +
+      (need.length ? '<ul class="ov-list">' + need.slice(0, 8).map(function (r) {
+        return '<li><a href="#/c/' + esc(r.client.id) + '/logs"><span class="ov-dot" style="background:' + S.ins.colors[r.client.id] + '"></span><b>' + esc(r.client.name) + "</b> " + statusBadge(r.status) +
+          '<span class="small muted">' + esc(r.reasons.filter(function (x) { return x.level > 0; }).map(reasonText).join(" · ")) + "</span></a></li>";
+      }).join("") + "</ul>" : '<p class="small muted">' + esc(t("ov_all_good")) + "</p>") + btns + "</div>";
+    bindBackup();
+  }
+  function bindBackup() {
+    var b = $("aBackup"); if (!b) return;
+    b.addEventListener("click", async function () {
+      b.disabled = true;
+      try {
+        var data = await ctx.api.exportAll();
+        var blob = new Blob([JSON.stringify({ app: "ReKomp", exported_at: new Date().toISOString(), data: data }, null, 1)], { type: "application/json" });
+        var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "rekomp-rezervna-kopija-" + today() + ".json";
+        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+        toast(t("backup_done"));
+      } catch (e) { toast(t("error_generic")); }
+      b.disabled = false;
+    });
+  }
+
+  async function renderProgress() {
+    S.detail = null;
+    var m = $("aMain");
+    m.innerHTML = '<p class="muted">' + esc(t("loading")) + "</p>";
+    try { if (!S.clients.length) S.clients = await ctx.api.listClients(); await loadInsightData(); }
+    catch (e) { m.innerHTML = '<div class="card"><p class="form-err">' + esc(t("error_generic")) + "</p></div>"; return; }
+    var I = insights(S.prWeeks), rows = I.rows;
+    var metrics = ["weight", "waist", "strength", "adherence"];
+    m.innerHTML = '<div class="card"><a href="#/" class="linkbtn">‹ ' + esc(t("back_to_clients")) + "</a><h2>" + esc(t("pr_title")) + "</h2>" +
+      '<div class="seg pr-seg" id="prWeeks">' + [4, 8, 12].map(function (n) { return '<button type="button" data-w="' + n + '" aria-pressed="' + (S.prWeeks === n) + '">' + esc(t("pr_weeks", { n: n })) + "</button>"; }).join("") + "</div>" +
+      '<div class="seg pr-seg" id="prMetric">' + metrics.map(function (k) { return '<button type="button" data-m="' + k + '" aria-pressed="' + (S.prMetric === k) + '">' + esc(t("pr_m_" + k)) + "</button>"; }).join("") + "</div>" +
+      '<p class="small muted">' + esc(t("pr_y_" + S.prMetric)) + '</p><div id="prChart"></div><div id="prLegend" class="pr-legend"></div></div>' +
+      '<div class="card"><div class="card-h"><h3>' + esc(t("pr_table")) + '</h3><label class="small muted pr-sort">' + esc(t("pr_sort")) + ' <select id="prSort">' +
+      ["status", "weight", "strength", "adherence"].map(function (k) { return '<option value="' + k + '"' + (S.prSort === k ? " selected" : "") + ">" + esc(t("pr_sort_" + k)) + "</option>"; }).join("") + "</select></label></div>" +
+      '<div class="pr-cards">' + (rows.length ? sortRows(rows).map(rowHtml).join("") : '<p class="muted">' + esc(t("ov_none_active")) + "</p>") + "</div>" +
+      '<p class="small muted">' + esc(t("pr_note")) + "</p></div>";
+    qsa("#prWeeks button", m).forEach(function (b) { b.addEventListener("click", function () { S.prWeeks = Number(b.dataset.w); renderProgress(); }); });
+    qsa("#prMetric button", m).forEach(function (b) { b.addEventListener("click", function () { S.prMetric = b.dataset.m; renderProgress(); }); });
+    $("prSort").addEventListener("change", function () { S.prSort = $("prSort").value; renderProgress(); });
+    drawChart(I);
+  }
+  function sign(x, dec) { var r = Number(Number(x).toFixed(dec == null ? 1 : dec)); return (r > 0 ? "+" : r < 0 ? "−" : "") + f1(Math.abs(r), dec); }
+  function sortRows(rows) {
+    var k = S.prSort || "status", list = rows.slice();
+    function v(r) { return k === "weight" ? r.weight.pct : k === "strength" ? r.strength : k === "adherence" ? r.adherence : null; }
+    if (k === "status") return list;
+    return list.sort(function (a, b) {
+      var x = v(a), y = v(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      return k === "weight" ? x - y : y - x;
+    });
+  }
+  function stat(label, value, sub) { return '<div class="pr-stat"><span class="pr-l">' + esc(label) + '</span><span class="pr-v">' + value + "</span>" + (sub ? '<span class="pr-s">' + esc(sub) + "</span>" : "") + "</div>"; }
+  function rowHtml(r) {
+    var goal = r.goal && FIELD_INDEX.goal_main ? optionLabel(FIELD_INDEX.goal_main, r.goal, getLang()) : "";
+    var reasons = r.reasons.map(reasonText).join(" · ");
+    return '<div class="pr-card" data-cid="' + esc(r.client.id) + '"><div class="pr-head"><a href="#/c/' + esc(r.client.id) + '/logs"><span class="ov-dot" style="background:' + S.ins.colors[r.client.id] + '"></span><b>' + esc(r.client.name) + "</b></a>" + statusBadge(r.status) + "</div>" +
+      (goal ? '<div class="small muted">' + esc(goal) + "</div>" : "") + (reasons ? '<div class="small">' + esc(reasons) + "</div>" : "") +
+      '<div class="pr-stats">' +
+        stat(t("col_weight_rate"), r.weight.rate != null ? esc(sign(r.weight.rate)) + " kg" : "—", r.weight.pct != null ? sign(r.weight.pct, 2) + "%" + (r.weight.status ? " · " + t("w_" + r.weight.status) : "") : "") +
+        stat(t("col_waist"), r.waist.rate != null ? esc(sign(r.waist.rate)) + " cm" : "—") +
+        stat(t("col_strength"), r.strength != null ? esc(sign(r.strength)) + "%" : "—") +
+        stat(t("col_adherence"), r.adherence != null ? r.adherence + "%" : "—", r.planned ? t("pr_planned", { n: r.planned }) : "") +
+        stat(t("col_checkins"), r.checkins + "/14", r.easy ? t("r_easy", { n: r.easy }) : "") +
+        stat(t("col_last"), esc(r.gap == null ? t("never") : r.gap === 0 ? t("today_word") : t("days_ago", { n: r.gap }))) +
+      "</div></div>";
+  }
+  function drawChart(I) {
+    var key = S.prMetric, weeks = I.weeks;
+    var lines = I.rows.map(function (r) { return { id: r.client.id, name: r.client.name, color: S.ins.colors[r.client.id], v: r.series[key] }; })
+      .filter(function (l) { return l.v.filter(function (x) { return x != null; }).length >= (key === "adherence" ? 1 : 2); });
+    var leg = $("prLegend"), box = $("prChart");
+    if (!lines.length) { box.innerHTML = '<p class="muted small">' + esc(t("pr_no_data")) + "</p>"; leg.innerHTML = ""; return; }
+    var shown = lines.filter(function (l) { return !S.prHidden[l.id]; });
+    var vals = []; shown.forEach(function (l) { l.v.forEach(function (x) { if (x != null) vals.push(x); }); });
+    var lo = Math.min.apply(null, vals.concat([0])), hi = Math.max.apply(null, vals.concat([0]));
+    if (key === "adherence") { lo = 0; hi = Math.max(100, hi); }
+    if (hi - lo < 1) { hi += 0.5; lo -= 0.5; }
+    var padv = (hi - lo) * 0.1; lo -= key === "adherence" ? 0 : padv; hi += padv;
+    var W = 360, H = 210, L = 38, Rm = 10, T = 10, B = 26, iw = W - L - Rm, ih = H - T - B;
+    function X(i) { return L + (weeks.length > 1 ? i * iw / (weeks.length - 1) : iw / 2); }
+    function Y(v) { return T + (hi - v) / (hi - lo) * ih; }
+    var svg = '<svg viewBox="0 0 ' + W + " " + H + '" class="pr-svg" role="img" aria-label="' + esc(t("pr_m_" + key)) + '">';
+    for (var g = 0; g <= 4; g++) {
+      var gv = lo + (hi - lo) * g / 4, gy = Y(gv);
+      svg += '<line x1="' + L + '" x2="' + (W - Rm) + '" y1="' + gy + '" y2="' + gy + '" class="grid"/><text x="' + (L - 6) + '" y="' + (gy + 4) + '" class="ax" text-anchor="end">' + esc(f1(gv, Math.abs(hi - lo) < 6 ? 1 : 0)) + "</text>";
+    }
+    if (lo < 0 && hi > 0) svg += '<line x1="' + L + '" x2="' + (W - Rm) + '" y1="' + Y(0) + '" y2="' + Y(0) + '" class="zero"/>';
+    var step = Math.ceil(weeks.length / 6);
+    weeks.forEach(function (wk, i) { if (i % step === 0 || i === weeks.length - 1) { var d = parseYmd(wk); svg += '<text x="' + X(i) + '" y="' + (H - 8) + '" class="ax" text-anchor="middle">' + d.getDate() + "." + (d.getMonth() + 1) + ".</text>"; } });
+    shown.forEach(function (l) {
+      var seg = [], segs = [];
+      l.v.forEach(function (v, i) { if (v == null) { if (seg.length) segs.push(seg); seg = []; } else seg.push(X(i).toFixed(1) + "," + Y(v).toFixed(1)); });
+      if (seg.length) segs.push(seg);
+      segs.forEach(function (s) { svg += '<polyline points="' + s.join(" ") + '" fill="none" stroke="' + l.color + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'; });
+      l.v.forEach(function (v, i) { if (v != null) svg += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3" fill="' + l.color + '"><title>' + esc(l.name + ": " + f1(v)) + "</title></circle>"; });
+    });
+    box.innerHTML = svg + "</svg>";
+    leg.innerHTML = lines.map(function (l) { return '<button type="button" data-cid="' + esc(l.id) + '" aria-pressed="' + !S.prHidden[l.id] + '"><span class="ov-dot" style="background:' + l.color + '"></span>' + esc(l.name) + "</button>"; }).join("");
+    qsa("button", leg).forEach(function (b) { b.addEventListener("click", function () { S.prHidden[b.dataset.cid] = !S.prHidden[b.dataset.cid]; drawChart(I); }); });
   }
   function drawList() {
     var q = S.q.trim().toLowerCase();

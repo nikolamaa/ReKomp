@@ -19,6 +19,8 @@ Hosting je besplatan: kod je na **GitHub Pages**, podaci u bazi **Supabase** (be
 
 Na dan sa treningom klijent može da izabere **Lakši dan**: lakši trening (serija manje, više ponavljanja u rezervi), šetnju i mobilnost ili pomeranje treninga na sutra. Razlog se ne pita; ti na kartici **Unosi** vidiš samo da je dan bio lakši.
 
+Na početnoj strani panela je **Pregled klijenata**: ko treba pažnju i zašto (nema unosa, malo treninga, težina ide suprotno od cilja, bol). Dugme **Napredak klijenata** otvara grafik za sve klijente (težina, struk, snaga, treninzi; 4, 8 ili 12 nedelja) i kartice sa tempom svakog klijenta, koje možeš da poređaš po stanju, težini, snazi ili treninzima.
+
 Poruke klijentu dodaješ na kartici **Plan** (deo **Poruke od trenera**). Pojavljuju se klijentu na ekranu Danas.
 
 ---
@@ -104,6 +106,8 @@ Uputstvo za instalaciju je i u samoj aplikaciji (profil klijenta) i u poruci sa 
 
 **Klijent traži brisanje podataka.** **Pristup** → **Obriši klijenta** (traži da upišeš ime za potvrdu). Briše plan, upitnik i sve unose. Nalog za prijavu ostaje u Supabase **Authentication → Users**; obriši ga i tamo.
 
+**Rezervna kopija.** Besplatan Supabase nema automatske kopije. Jednom nedeljno u panelu klikni **Rezervna kopija** i sačuvaj preuzeti fajl (sadrži zdravstvene podatke klijenata, čuvaj ga kao poverljiv).
+
 **Aplikacija ne radi nekoliko dana.** Besplatan Supabase projekat se pauzira posle oko nedelju dana bez korišćenja. Sa klijentima koji svakodnevno unose podatke to se ne dešava. Ako se desi: Supabase → projekat → **Restore**. Podaci ostaju.
 
 ---
@@ -140,6 +144,7 @@ Ova aplikacija je PWA (web aplikacija koja se instalira sa sajta), pa ne treba A
 | `js/intake-ui.js` | prikaz upitnika korak po korak |
 | `js/client.js` | klijentska strana: Danas, Trening, Ishrana, Kalendar, Napredak |
 | `js/admin.js` | trenerski panel |
+| `js/insights.js` | pregled napretka i upozorenja za trenera |
 | `js/plan-format.js` | provera plana i tekst za Claude |
 | `js/i18n.js` | prevodi (srpski, engleski, ruski) |
 | `js/api.js` | rad sa bazom i demo režim |
