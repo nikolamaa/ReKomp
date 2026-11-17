@@ -5,5 +5,5 @@ window.REKOMP_CONFIG = {
   supabaseUrl: "https://ezowwzleaivcoqkuvyig.supabase.co",      // npr. "https://abcdefghijkl.supabase.co"
   supabaseAnonKey: "sb_publishable_fT5BfSG0dy_jvKM7CxDJVg_LpY7hqt7",  // Project Settings → API Keys → "anon" / "publishable" ključ
   appUrl: "https://rekomp.me/",
-  emailReset: false     // true kad je Resend podešen u Supabase (SMTP)
+  emailReset: true      // Resend preko Supabase SMTP (mail.rekomp.me)
 };
