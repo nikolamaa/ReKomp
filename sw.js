@@ -1,5 +1,5 @@
 // Service worker: aplikacija se otvara i bez interneta; izmene stižu čim ima veze.
-var VERSION = "rekomp-v10";
+var VERSION = "rekomp-v11";
 var SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./manifest.webmanifest", "./vendor/supabase.js",
   "./js/app.js", "./js/api.js", "./js/util.js", "./js/i18n.js", "./js/intake.js", "./js/intake-ui.js",
@@ -22,7 +22,9 @@ self.addEventListener("fetch", function (e) {
   if (url.origin !== self.location.origin) return; // Supabase i fontovi idu direktno na mrežu
   // Prvo mreža (da izmene stignu odmah), keš ako nema interneta.
   // cache: "no-cache" = uvek proveri kod servera da li ima nove verzije (brzo, 304 ako nema).
-  e.respondWith(fetch(req, { cache: "no-cache" }).then(function (res) {
+  // (navigacija mora bez opcija, inače pregledač odbija zahtev)
+  var net = req.mode === "navigate" ? fetch(req) : fetch(req, { cache: "no-cache" });
+  e.respondWith(net.then(function (res) {
     if (res && res.ok) { var copy = res.clone(); caches.open(VERSION).then(function (c) { c.put(req, copy); }); }
     return res;
   }).catch(function () {
