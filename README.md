@@ -114,7 +114,7 @@ Uputstvo za instalaciju je i u samoj aplikaciji (profil klijenta) i u poruci sa 
 
 **Klijent je zaboravio lozinku.** Na prijavi: **Zaboravio/la si lozinku?** → upiše e-mail → stiže link (Resend, `no-reply@mail.rekomp.me`) → otvara ekran **Nova lozinka**. Ako mejl ne stigne: na kartici **Pristup** klikni **Napravi novi kod**, klijent napravi novi nalog sa tim kodom i dobija sve svoje podatke (vezani su za klijenta, ne za nalog).
 
-**E-pošta (Resend).** Domen `mail.rekomp.me` u Resendu (region Ireland), zapisi u Cloudflareu. Supabase → Authentication → Emails → SMTP: `smtp.resend.com`, port 465, korisnik `resend`, lozinka = Resend ključ samo za slanje. Šablon „Reset password“ je na tri jezika. U `config.js` je `emailReset: true`.
+**E-pošta (Resend).** Domen `mail.rekomp.me` u Resendu (region Ireland), zapisi u Cloudflareu. Supabase → Authentication → Emails → SMTP: `smtp.resend.com`, port 465, korisnik `resend`, lozinka = Resend ključ samo za slanje. Šablon „Reset password“ je na tri jezika, sa logom (kopija za lepljenje: `supabase/email_reset.html`). U `config.js` je `emailReset: true`.
 
 **Klijent je dopunio upitnik.** U listi dobija oznaku **Nove izmene u upitniku**. Pogledaj odgovore i klikni **Označi kao pregledano**.
 

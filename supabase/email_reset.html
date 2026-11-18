@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<body style="margin:0;padding:0;background:#EEF1F4;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EEF1F4;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background:#FFFFFF;border-radius:16px;">
+<tr><td style="padding:28px 28px 0 28px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td style="padding-right:10px;"><img src="https://rekomp.me/icons/icon-192.png" width="40" height="40" alt="" style="display:block;border:0;border-radius:9px;"></td>
+<td style="font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:bold;color:#141D26;">ReKomp</td>
+</tr></table>
+</td></tr>
+<tr><td style="padding:24px 28px 28px 28px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;color:#141D26;">
+{{ if eq (printf "%v" .Data.lang) "en" }}
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.25;">Set a new password</h1>
+<p style="margin:0 0 24px 0;">We received a request to change the password for your ReKomp account.</p>
+<a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#F27F70;color:#141D26;font-weight:bold;text-decoration:none;padding:14px 24px;border-radius:10px;">Set new password</a>
+<p style="margin:24px 0 0 0;font-size:14px;color:#4F5D6B;">If you didn't request this, you can ignore this email. Your password won't change.</p>
+<p style="margin:12px 0 0 0;font-size:13px;color:#4F5D6B;word-break:break-all;">If the button doesn't work, open this link:<br><a href="{{ .ConfirmationURL }}" style="color:#B8432F;">{{ .ConfirmationURL }}</a></p>
+{{ else if eq (printf "%v" .Data.lang) "ru" }}
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.25;">Новый пароль</h1>
+<p style="margin:0 0 24px 0;">Мы получили запрос на смену пароля для вашего аккаунта ReKomp.</p>
+<a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#F27F70;color:#141D26;font-weight:bold;text-decoration:none;padding:14px 24px;border-radius:10px;">Задать новый пароль</a>
+<p style="margin:24px 0 0 0;font-size:14px;color:#4F5D6B;">Если вы не запрашивали смену пароля, просто проигнорируйте это письмо. Пароль останется прежним.</p>
+<p style="margin:12px 0 0 0;font-size:13px;color:#4F5D6B;word-break:break-all;">Если кнопка не работает, откройте эту ссылку:<br><a href="{{ .ConfirmationURL }}" style="color:#B8432F;">{{ .ConfirmationURL }}</a></p>
+{{ else }}
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.25;">Nova lozinka</h1>
+<p style="margin:0 0 24px 0;">Stigao je zahtev za promenu lozinke za tvoj ReKomp nalog.</p>
+<a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#F27F70;color:#141D26;font-weight:bold;text-decoration:none;padding:14px 24px;border-radius:10px;">Postavi novu lozinku</a>
+<p style="margin:24px 0 0 0;font-size:14px;color:#4F5D6B;">Ako nisi ti tražio/la promenu, samo ignoriši ovaj mejl. Lozinka ostaje ista.</p>
+<p style="margin:12px 0 0 0;font-size:13px;color:#4F5D6B;word-break:break-all;">Ako dugme ne radi, otvori ovaj link:<br><a href="{{ .ConfirmationURL }}" style="color:#B8432F;">{{ .ConfirmationURL }}</a></p>
+{{ end }}
+</td></tr>
+</table>
+<p style="margin:16px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#6B7785;">rekomp.me</p>
+</td></tr>
+</table>
+</body>
+</html>
