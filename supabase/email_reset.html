@@ -32,7 +32,27 @@
 {{ end }}
 </td></tr>
 </table>
-<p style="margin:16px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#6B7785;">rekomp.me</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+<tr><td style="padding:20px 28px 0 28px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.55;color:#5B6774;">
+{{ if eq (printf "%v" .Data.lang) "en" }}
+<p style="margin:0 0 8px 0;">This email was sent to {{ .Email }} because a new password was requested for this account on rekomp.me.</p>
+<p style="margin:0 0 8px 0;">The link works only once and expires soon. Don't forward this email to anyone. ReKomp will never ask for your password by email, message or phone.</p>
+<p style="margin:0 0 8px 0;">If you didn't request a new password and these emails keep arriving, let your coach know.</p>
+<p style="margin:0 0 8px 0;">This is an automated message. Please don't reply, replies are not read.</p>
+{{ else if eq (printf "%v" .Data.lang) "ru" }}
+<p style="margin:0 0 8px 0;">Это письмо отправлено на {{ .Email }}, потому что на rekomp.me запросили новый пароль для этого аккаунта.</p>
+<p style="margin:0 0 8px 0;">Ссылка срабатывает только один раз и скоро перестаёт действовать. Не пересылайте это письмо никому. ReKomp никогда не просит ваш пароль по почте, в сообщениях или по телефону.</p>
+<p style="margin:0 0 8px 0;">Если вы не запрашивали новый пароль, а такие письма приходят снова, сообщите об этом своему тренеру.</p>
+<p style="margin:0 0 8px 0;">Это автоматическое сообщение. Не отвечайте на него, ответы никто не читает.</p>
+{{ else }}
+<p style="margin:0 0 8px 0;">Ovaj mejl je poslat na {{ .Email }} jer je na rekomp.me zatražena nova lozinka za taj nalog.</p>
+<p style="margin:0 0 8px 0;">Link radi samo jednom i ubrzo ističe. Ne prosleđuj ovaj mejl nikome. ReKomp nikad neće tražiti tvoju lozinku mejlom, porukom ili telefonom.</p>
+<p style="margin:0 0 8px 0;">Ako nisi ti tražio/la novu lozinku, a ovakvi mejlovi i dalje stižu, javi se svom treneru.</p>
+<p style="margin:0 0 8px 0;">Ovo je automatska poruka. Ne odgovaraj na nju, odgovori se ne čitaju.</p>
+{{ end }}
+<p style="margin:12px 0 0 0;">© ReKomp · rekomp.me</p>
+</td></tr>
+</table>
 </td></tr>
 </table>
 </body>
