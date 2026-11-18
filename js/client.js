@@ -758,9 +758,11 @@ export function mountClient(root, ctx) {
   };
 }
 
+// Znak: kratka kosa crta + strelica gore (isti oblik kao icons/logo-mark.svg).
+var BRAND_MARK = '<svg class="brand-mark" viewBox="339 297 329.1 250" aria-hidden="true" focusable="false">' +
+  '<path d="M339 546L417 546L514.3 407L466.3 407Q436.3 407 419.1 431.6Z"/>' +
+  '<path d="M668.1 297L668.1 435L631.5 409.4L557.5 515C546 531.4 527 547 505 547C481 547 463 530 463 508C463 493 474 485 486 489L575.1 369.9L538.4 344.2Z"/></svg>';
+
 export function brandHtml(name) {
-  name = name || "ReKomp";
-  var m = name.match(/^(.*?)([A-ZČĆŽŠĐ][^A-ZČĆŽŠĐ]*)$/);
-  if (m && m[1]) return esc(m[1]) + "<span>" + esc(m[2]) + "</span>";
-  return esc(name);
+  return BRAND_MARK + '<span class="brand-name">' + esc(name || "ReKomp") + "</span>";
 }

@@ -50,9 +50,10 @@ a { color: var(--blue); }
 /* header */
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
 .top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-block: 10px; }
-.brand { font-family: var(--font-display); font-weight: 700; font-size: 1.45rem; letter-spacing: 0.01em; line-height: 1; white-space: nowrap; min-width: 0; }
-.brand span { color: var(--accent); }
-.brand .role { font-family: var(--font-body); font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-left: 6px; }
+.brand { display: inline-flex; align-items: center; gap: 0.32em; font-family: var(--font-body); font-weight: 600; font-size: 1.375rem; letter-spacing: -0.005em; line-height: 1; white-space: nowrap; min-width: 0; color: var(--ink); }
+.brand-mark { height: 0.8em; width: auto; flex: none; fill: var(--accent); }
+.brand-name { color: var(--ink); }
+.brand .role { font-family: var(--font-body); font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-left: 2px; }
 .big-brand { font-size: 2.6rem; }
 .top-r { display: flex; align-items: center; gap: 8px; flex: none; }
 .hdr-date { color: var(--muted); font-size: 0.92rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
