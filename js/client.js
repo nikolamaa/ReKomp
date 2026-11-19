@@ -674,8 +674,46 @@ export function mountClient(root, ctx) {
   function openWeek(m) {
     var rows = {};
     weekDays(m).forEach(function (d) { rows[d] = rowOf(dayEntry(d)); });
-    S.wp = { m: m, rows: rows, from: S.view === "week" ? "danas" : S.view, saved: "" };
+    // manual: klijent je sam dirao dane treninga, pa ih promena smene više ne pomera
+    S.wp = { m: m, rows: rows, from: S.view === "week" ? "danas" : S.view, saved: "", manual: false, suggested: false };
+    // nova nedelja koja bi počela treningom odmah posle nedeljnog treninga: odmah predloži bolji raspored
+    var pe = dayEntry(addDays(m, -1));
+    if (!S.weeks[m] && rows[m].train && pe && pe.workout && WK[pe.workout]) wpSuggest();
     renderWeek(); go("week");
+  }
+  function combos(arr, k) {
+    var out = [];
+    (function rec(start, acc) {
+      if (acc.length === k) { out.push(acc.slice()); return; }
+      for (var i = start; i < arr.length; i++) { acc.push(arr[i]); rec(i + 1, acc); acc.pop(); }
+    })(0, []);
+    return out;
+  }
+  // Predlog dana treninga: isti broj kao u planu, što ravnomernije razmaknuti (bez tri dana zaredom),
+  // kad može na slobodne dane, a pri istom rasporedu ostaju dani iz plana. Prošli dani se ne diraju.
+  function wpSuggest() {
+    var list = weekDays(S.wp.m), N = weekSeq(S.wp.m).length, td = ymd(new Date());
+    if (!N) return;
+    var fixedOn = [], open = [], base = {};
+    list.forEach(function (d, i) {
+      if (d < td) { if (S.wp.rows[d].train) fixedOn.push(i); } else open.push(i);
+      var b = baseEntry(d); base[i] = !!(b && b.workout && WK[b.workout]);
+    });
+    var k = Math.max(0, Math.min(open.length, N - fixedOn.length));
+    var prev = null;   // poslednji trening prethodne nedelje: -1 = nedelja pre tog ponedeljka
+    for (var j = 1; j <= 3 && prev == null; j++) { var pe = dayEntry(addDays(S.wp.m, -j)); if (pe && pe.workout && WK[pe.workout]) prev = -j; }
+    var ideal = 7 / N, best = null, bestScore = -Infinity;
+    combos(open, k).forEach(function (c) {
+      var days = fixedOn.concat(c).sort(function (a, b) { return a - b; });
+      var all = (prev != null ? [prev] : []).concat(days), row = 0, three = 0, run = 1, spread = 0, free = 0, same = 0;
+      for (var x = 1; x < all.length; x++) { if (all[x] - all[x - 1] === 1) { row++; run++; if (run >= 3) three++; } else run = 1; }
+      for (var y = 1; y < days.length; y++) { var g = days[y] - days[y - 1]; spread += (g - ideal) * (g - ideal); }
+      c.forEach(function (i) { if (S.wp.rows[list[i]].v === "") free++; if (base[i]) same++; });
+      var score = -1000 * three - 8 * row - spread + 2 * free + same;
+      if (score > bestScore + 1e-9) { bestScore = score; best = c; }
+    });
+    open.forEach(function (i) { S.wp.rows[list[i]].train = !!best && best.indexOf(i) >= 0; });
+    S.wp.suggested = true;
   }
   function wpAssign() {
     var seq = weekSeq(S.wp.m), i = 0, out = {};
@@ -721,24 +759,29 @@ export function mountClient(root, ctx) {
           "</div>";
       }).join("") + "</div>" +
       (seq.length ? '<p class="small"><b>' + esc(t("wp_count", { n: n, m: seq.length })) + "</b>" + (n !== seq.length ? " · " + esc(t("wp_warn_count", { m: seq.length })) : "") + "</p>" : "") +
+      (S.wp.suggested && seq.length ? '<div class="hint ok">' + esc(t("wp_suggested")) + "</div>" : "") +
       (row3 ? '<div class="hint warn">' + esc(t("wp_warn_row")) + "</div>" : "") +
       '<div class="actions"><button type="button" class="btn" id="wpSave"' + dis + ">" + esc(t("wp_save")) + "</button>" +
-      (ctx.readonly ? "" : '<button type="button" class="btn ghost small" id="wpSame">' + esc(t("wp_same")) + '</button><button type="button" class="btn ghost small" id="wpReset">' + esc(t("wp_reset")) + "</button>") +
+      (ctx.readonly ? "" : (seq.length ? '<button type="button" class="btn ghost small" id="wpSuggest">' + esc(t("wp_suggest")) + "</button>" : "") +
+        '<button type="button" class="btn ghost small" id="wpSame">' + esc(t("wp_same")) + '</button><button type="button" class="btn ghost small" id="wpReset">' + esc(t("wp_reset")) + "</button>") +
       '<span class="status" id="wpSt" role="status">' + esc(S.wp.saved) + "</span></div></div>";
   }
   root.addEventListener("change", function (e) {
     var d = e.target && e.target.dataset ? e.target.dataset.wpShift : null; if (!d || !S.wp) return;
-    S.wp.rows[d].v = e.target.value; S.wp.saved = ""; renderWeek();
+    S.wp.rows[d].v = e.target.value; S.wp.saved = "";
+    if (!S.wp.manual) wpSuggest();   // promena slobodnih dana sama pomera treninge, dok ih klijent ne podesi ručno
+    renderWeek();
   });
   root.addEventListener("click", async function (e) {
-    var el = e.target.closest && e.target.closest("[data-wp],[data-wp-train],#wpBack,#wpSave,#wpSame,#wpReset");
+    var el = e.target.closest && e.target.closest("[data-wp],[data-wp-train],#wpBack,#wpSave,#wpSame,#wpReset,#wpSuggest");
     if (!el) return;
     if (el.dataset.wp) { openWeek(el.dataset.wp); return; }
     if (!S.wp) return;
-    if (el.dataset.wpTrain) { var r = S.wp.rows[el.dataset.wpTrain]; r.train = !r.train; S.wp.saved = ""; renderWeek(); return; }
+    if (el.dataset.wpTrain) { var r = S.wp.rows[el.dataset.wpTrain]; r.train = !r.train; S.wp.manual = true; S.wp.suggested = false; S.wp.saved = ""; renderWeek(); return; }
+    if (el.id === "wpSuggest") { S.wp.manual = false; wpSuggest(); S.wp.saved = ""; renderWeek(); return; }
     if (el.id === "wpBack") { var f = S.wp.from; S.wp = null; go(f); return; }
-    if (el.id === "wpSame") { var pm = addDays(S.wp.m, -7); weekDays(S.wp.m).forEach(function (d, i) { S.wp.rows[d] = rowOf(dayEntry(addDays(pm, i))); }); S.wp.saved = ""; renderWeek(); return; }
-    if (el.id === "wpReset") { weekDays(S.wp.m).forEach(function (d) { S.wp.rows[d] = rowOf(baseEntry(d)); }); S.wp.saved = ""; renderWeek(); return; }
+    if (el.id === "wpSame") { var pm = addDays(S.wp.m, -7); weekDays(S.wp.m).forEach(function (d, i) { S.wp.rows[d] = rowOf(dayEntry(addDays(pm, i))); }); S.wp.manual = false; S.wp.suggested = false; S.wp.saved = ""; renderWeek(); return; }
+    if (el.id === "wpReset") { weekDays(S.wp.m).forEach(function (d) { S.wp.rows[d] = rowOf(baseEntry(d)); }); S.wp.manual = false; S.wp.suggested = false; S.wp.saved = ""; renderWeek(); return; }
     if (el.id === "wpSave" && !ctx.readonly) {
       var days = wpDays(), m = S.wp.m;
       $("wpSt").textContent = t("saving"); el.disabled = true;
