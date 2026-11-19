@@ -694,12 +694,17 @@ export function mountClient(root, ctx) {
   function wpSuggest() {
     var list = weekDays(S.wp.m), N = weekSeq(S.wp.m).length, td = ymd(new Date());
     if (!N) return;
-    var fixedOn = [], open = [], base = {};
+    var fixedOn = [], open = [], blocked = [], base = {}, noTrain = Array.isArray(P.noTrainDays) ? P.noTrainDays : [];
     list.forEach(function (d, i) {
-      if (d < td) { if (S.wp.rows[d].train) fixedOn.push(i); } else open.push(i);
+      if (d < td) { if (S.wp.rows[d].train) fixedOn.push(i); }
+      else if (noTrain.indexOf(weekdayKey(d)) >= 0) blocked.push(i);   // stalna obaveza: samo ako drugačije ne staje
+      else open.push(i);
       var b = baseEntry(d); base[i] = !!(b && b.workout && WK[b.workout]);
     });
-    var k = Math.max(0, Math.min(open.length, N - fixedOn.length));
+    var need = Math.max(0, N - fixedOn.length);
+    if (open.length < need) open = open.concat(blocked).sort(function (a, b) { return a - b; });
+    else blocked.forEach(function (i) { S.wp.rows[list[i]].train = false; });
+    var k = Math.max(0, Math.min(open.length, need));
     var prev = null;   // poslednji trening prethodne nedelje: -1 = nedelja pre tog ponedeljka
     for (var j = 1; j <= 3 && prev == null; j++) { var pe = dayEntry(addDays(S.wp.m, -j)); if (pe && pe.workout && WK[pe.workout]) prev = -j; }
     var ideal = 7 / N, best = null, bestScore = -Infinity;
@@ -746,6 +751,8 @@ export function mountClient(root, ctx) {
     var opts = [["", t("wp_free")]].concat(RH_KEYS.length > 1 ? RH_KEYS.map(function (k) { return [k, RH[k].label || k]; }) : [["work", t("wp_work")]]);
     var run = 0, row3 = false;
     list.forEach(function (d) { run = S.wp.rows[d].train ? run + 1 : 0; if (run >= 3) row3 = true; });
+    var noTrain = Array.isArray(P.noTrainDays) ? P.noTrainDays : [];
+    var blockedOn = list.filter(function (d) { return S.wp.rows[d].train && noTrain.indexOf(weekdayKey(d)) >= 0; }).map(function (d) { return fmtShortDate(parseYmd(d)).split(" ")[0]; });
     var title = m === monday(td) ? t("wp_this_title") : (m > td ? t("wp_next_title") : t("wp_title")), dis = ctx.readonly ? " disabled" : "";
     v.innerHTML = '<div class="card"><div class="card-h"><h2>' + esc(title) + '</h2><button type="button" class="btn ghost small" id="wpBack">' + esc(t("back")) + "</button></div>" +
       '<span class="label">' + esc(fmtRange(parseYmd(m), parseYmd(addDays(m, 6)))) + "</span>" +
@@ -761,6 +768,7 @@ export function mountClient(root, ctx) {
       (seq.length ? '<p class="small"><b>' + esc(t("wp_count", { n: n, m: seq.length })) + "</b>" + (n !== seq.length ? " · " + esc(t("wp_warn_count", { m: seq.length })) : "") + "</p>" : "") +
       (S.wp.suggested && seq.length ? '<div class="hint ok">' + esc(t("wp_suggested")) + "</div>" : "") +
       (row3 ? '<div class="hint warn">' + esc(t("wp_warn_row")) + "</div>" : "") +
+      (blockedOn.length ? '<div class="hint warn">' + esc(t("wp_warn_block", { x: blockedOn.join(", ") })) + "</div>" : "") +
       '<div class="actions"><button type="button" class="btn" id="wpSave"' + dis + ">" + esc(t("wp_save")) + "</button>" +
       (ctx.readonly ? "" : (seq.length ? '<button type="button" class="btn ghost small" id="wpSuggest">' + esc(t("wp_suggest")) + "</button>" : "") +
         '<button type="button" class="btn ghost small" id="wpSame">' + esc(t("wp_same")) + '</button><button type="button" class="btn ghost small" id="wpReset">' + esc(t("wp_reset")) + "</button>") +

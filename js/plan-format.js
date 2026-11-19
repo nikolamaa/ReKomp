@@ -6,7 +6,7 @@ var TIME = /^\d{1,2}:\d{2}$/;
 var DAY = /^\d{4}-\d{2}-\d{2}$/;
 var WEEK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 var KNOWN = ["version", "start", "baseline", "targets", "checkin", "notes", "program", "defaultRhythm", "rhythms", "weekTemplate",
-  "calendar", "workMenu", "recipes", "shopping", "nutritionRules", "rules", "supplements"];
+  "calendar", "workMenu", "recipes", "shopping", "nutritionRules", "rules", "supplements", "noTrainDays"];
 
 export function validatePlan(text) {
   var errors = [], warnings = [], p;
@@ -29,14 +29,17 @@ export function validatePlan(text) {
   Object.keys(rhythms).forEach(function (rk) {
     var r = rhythms[rk];
     ["wakeAt", "sleepAt", "coffeeAt", "napAt", "shiftStartAt", "shiftEndAt", "trainingAt", "cookAt"].forEach(function (f) {
-      if (r[f] != null && !TIME.test(String(r[f]))) errors.push("rhythms." + rk + "." + f + " must be HH:MM (can be over 24:00)");
+      if (r[f] != null && r[f] !== "" && !TIME.test(String(r[f]))) errors.push("rhythms." + rk + "." + f + " must be HH:MM (can be over 24:00)");
+    });
+    if (r.free) ["wakeAt", "trainingAt"].forEach(function (f) {
+      if (r.free[f] != null && r.free[f] !== "" && !TIME.test(String(r.free[f]))) errors.push("rhythms." + rk + ".free." + f + " must be HH:MM");
     });
     var lists = [r.meals || []].concat(r.free && r.free.meals ? [r.free.meals] : []);
     lists.forEach(function (meals) {
       if (!Array.isArray(meals)) { errors.push("rhythms." + rk + ".meals must be a list"); return; }
       meals.forEach(function (m, j) {
         if (!m.key) errors.push("rhythms." + rk + " meal " + j + ": key missing");
-        if (m.at != null && !TIME.test(String(m.at))) errors.push("rhythms." + rk + " meal " + (m.key || j) + ": at must be HH:MM");
+        if (m.at != null && m.at !== "" && !TIME.test(String(m.at))) errors.push("rhythms." + rk + " meal " + (m.key || j) + ": at must be HH:MM");
       });
     });
   });
@@ -56,6 +59,7 @@ export function validatePlan(text) {
     if (!DAY.test(k)) errors.push("calendar key must be YYYY-MM-DD: " + k); else checkDay("calendar." + k, p.calendar[k]);
   });
   if (p.start && !DAY.test(p.start)) errors.push("start must be YYYY-MM-DD");
+  if (p.noTrainDays != null && (!Array.isArray(p.noTrainDays) || p.noTrainDays.some(function (d) { return WEEK.indexOf(d) < 0; }))) errors.push("noTrainDays must be a list of mon…sun");
   if (p.shopping && p.shopping.items && !Array.isArray(p.shopping.items)) errors.push("shopping.items must be a list");
   ["targets", "notes", "rules", "supplements", "nutritionRules"].forEach(function (k) { if (p[k] != null && !Array.isArray(p[k])) errors.push(k + " must be a list"); });
 
@@ -91,7 +95,8 @@ export var PLAN_FORMAT = [
   '      "free": { "wakeAt": "08:30", "trainingAt": "10:00", "meals": [ … ] },   // poseban raspored za slobodne dane',
   '      "tips": [ "" ] } },',
   '  "weekTemplate": { "mon": { "work": true, "rhythm": "kljuc", "shift": "naziv dana", "workout": "A", "time": "18:00", "cook": "r1", "note": "" }, … "sun": {} },',
-  '  "calendar": { "YYYY-MM-DD": { isto kao dan u weekTemplate } },   // izuzeci i smene po datumima',
+  '  "calendar": { "YYYY-MM-DD": { isto kao dan u weekTemplate } },   // izuzeci i smene po datumima; napomene vezane za trening stavi u workouts[].notes',
+  '  "noTrainDays": [ "tue" ],   // dani kad klijent nikad ne može da trenira (stalna obaveza); predlog dana treninga ih preskače',
   '  "workMenu": { "kljuc": { "days": { "mon": { "pick": "", "protein": 35, "alts": [ "" ], "tip": "" } } } },',
   '  "recipes": { "r1": { "name": "", "short": "", "perBox": "4 kutije · ~450 kcal · ~38 g", "time": "", "ingredients": [ "" ], "steps": [ "" ], "storage": [ "" ] } },',
   '  "shopping": { "currency": "RSD", "note": "", "items": [ { "name": "", "qty": "", "min": 0, "max": 0 } ] },',
@@ -133,6 +138,7 @@ export function claudePrompt(client, answers) {
     "- Ako su slobodni dani klizni (days_off: menjaju se ili nemam stalne), klijent ih svake nedelje sam bira u aplikaciji: weekTemplate napravi kao uobičajenu nedelju sa željenim brojem treninga, a svaki ritam (smena) neka ima free raspored za slobodan dan (wakeAt, trainingAt, meals).",
     "- Popuni samo delove za koje odgovori daju osnovu. Za smene napravi rhythms za svaku smenu i calendar po datumima, ako je raspored poznat.",
     "- Podaci su bez imena i kontakta; u planu klijenta ne oslovljavaj imenom.",
+    "- Kad klijent sam bira nedelju, napomene u weekTemplate i calendar ne smeju da kažu da je dan sa ili bez treninga (trening može da se pomeri). Stalne zabrane za trening idu u noTrainDays.",
     "- Vrati SAMO validan JSON, bez objašnjenja i bez ``` oznaka.",
     "",
     PLAN_FORMAT,
