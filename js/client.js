@@ -86,9 +86,22 @@ export function mountClient(root, ctx) {
     }
     return null;
   }
+  // Obrok „posle treninga“ (post: true ili takav naziv) važi samo kad tog dana stvarno ima treninga.
+  // Bez treninga dobija običan naziv (restName ili po dobu dana); kad trening kasni, obrok ide posle njega.
+  var POST_RE = /posle treninga|after (training|workout)|после тренировки/i;
+  function isPostMeal(m) { return m.post === true || POST_RE.test(m.name || ""); }
+  function plainMealName(at) {
+    var h = at == null ? -1 : Math.floor(at / 60) % 24;
+    return h >= 11 && h < 16 ? t("meal_lunch") : (h >= 16 && h < 21 ? t("meal_dinner") : t("meal_generic"));
+  }
+  function trainAt(date) {
+    var tr = trainOf(date), r = rhythmOf(date);
+    if (!tr || tr.away || tr.easy === "walk") return null;
+    var at = hm(tr.time); return at != null ? at : hm(r && r.trainingAt);
+  }
   function mealsFor(date) {
     var r = rhythmOf(date); if (!r) return null;
-    var work = isWork(date), mp = menuPick(date);
+    var work = isWork(date), mp = menuPick(date), tAt = trainAt(date);
     var list = !work && r.free && Array.isArray(r.free.meals) ? r.free.meals : (r.meals || []);
     return list.map(function (m) {
       var x = { key: m.key, at: hm(m.at || m.time), time: m.time || m.at, name: m.name, what: m.what, protein: m.protein, box: !!m.box };
@@ -96,10 +109,14 @@ export function mountClient(root, ctx) {
         if (work) { x.what = mp ? mp.pick : (m.what || ""); if (mp && mp.protein) x.protein = mp.protein; x.alts = mp && mp.alts; x.tip = mp && mp.tip; }
         else { x.name = m.freeName || x.name; x.what = m.freeWhat || x.what; x.protein = m.freeProtein || x.protein; if (m.freeAt) x.at = hm(m.freeAt); x.box = !m.freeWhat; }
       }
+      if (isPostMeal(m)) {
+        if (tAt == null) x.name = m.restName || plainMealName(x.at);
+        else if (x.at != null && x.at < tAt + 75) { x.at = tAt + 90; x.time = fmtMin(x.at); }
+      }
       var box = x.box ? boxFor(date, x.at) : null;
       if (box) x.what = t("box_of", { x: box.name }) + (box.frozen ? " (" + t("from_freezer") + ")" : "");
       return x;
-    });
+    }).sort(function (a, b) { return (a.at == null ? 0 : a.at) - (b.at == null ? 0 : b.at); });
   }
   function inLabel(diff) {
     if (diff <= 5) return t("now");
@@ -217,7 +234,7 @@ export function mountClient(root, ctx) {
       items.push({ at: hm(r.cookAt), o: 3, kind: "cook", title: t("cooking", { x: rc ? rc.name : e.cook }), sub: (rc && rc.time ? rc.time + " " : "") + t("cooking_sub") });
     }
     if (work && hm(r.shiftStartAt) != null) items.push({ at: hm(r.shiftStartAt), o: 1, kind: "shift", title: t("shift_start"), sub: [r.hours, t("stand_up")].filter(Boolean).join(". ") });
-    if (work && hm(r.shiftEndAt) != null) items.push({ at: hm(r.shiftEndAt), o: 1, kind: "shift", title: t("shift_end"), sub: r.endTip || "" });
+    if (work && hm(r.shiftEndAt) != null) items.push({ at: hm(r.shiftEndAt), o: 1, kind: "shift", title: t("shift_end"), sub: (trainAt(day) != null && r.endTipTrain) || r.endTip || "" });
     if (hm(r.coffeeAt) != null) items.push({ at: hm(r.coffeeAt), o: 4, kind: "coffee", title: t("last_coffee"), sub: t("last_coffee_sub") });
     if (hm(r.napAt) != null && (work || r.napOnFree)) items.push({ at: hm(r.napAt), o: 1, kind: "sleep", title: t("nap"), sub: r.nap || "" });
     if (hm(r.sleepAt) != null) items.push({ at: hm(r.sleepAt), o: 5, kind: "sleep", title: t("sleep"), sub: r.sleep ? t("sleep_goal", { x: r.sleep }) : "" });

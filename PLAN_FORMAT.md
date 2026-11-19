@@ -33,7 +33,9 @@ FORMAT PLANA (JSON objekat; svi delovi su neobavezni, izostavi ono za šta nema 
       "wakeAt": "07:00", "shiftStartAt": "09:00", "shiftEndAt": "17:00", "trainingAt": "18:00", "coffeeAt": "15:00", "napAt": "", "cookAt": "19:30", "sleepAt": "23:00",
       "dayEnd": 0,   // za noćnu smenu: sat do kog važi prethodni dan, npr. 9
       "meals": [ { "key": "dorucak", "at": "07:30", "name": "Doručak", "what": "", "protein": 25, "box": true (kutija iz kuvanja), "work": true (obrok sa posla),
+                   "post": true (obrok posle treninga), "restName": "" (naziv kad nema treninga),
                    "freeName": "", "freeWhat": "", "freeProtein": 0, "freeAt": "" (zamena za slobodan dan) } ],
+      "endTip": "", "endTipTrain": "",   // savet za kraj smene; endTipTrain samo za dane sa treningom
       "free": { "wakeAt": "08:30", "meals": [ … ] },   // poseban raspored za slobodne dane
       "tips": [ "" ] } },
   "weekTemplate": { "mon": { "work": true, "rhythm": "kljuc", "shift": "naziv dana", "workout": "A", "time": "18:00", "cook": "r1", "note": "" }, … "sun": {} },
@@ -53,6 +55,8 @@ Napomene:
 - `weekTemplate` važi za svaku nedelju; `calendar` po datumu ima prednost (smene, slobodni dani, izuzeci).
 - Za noćnu smenu: `dayEnd` (npr. 9) znači da do 09:00 aplikacija i dalje prikazuje prethodni dan, a vremena posle ponoći pišeš kao 24:30, 26:00…
 - `box: true` u obroku znači kutiju iz poslednjeg kuvanja (`cook` u rasporedu), `work: true` obrok sa posla (`workMenu`).
+- Obrok posle treninga označi sa `"post": true` (ili ga nazovi „Posle treninga“). Na dan bez treninga, kad je trening pomeren ili zamenjen šetnjom, aplikacija ga sama preimenuje u `restName` (npr. „Ručak“) ili u Ručak/Večera/Obrok po vremenu. Kad trening počinje kasnije, obrok se pomera na 90 min posle početka treninga.
+- Tekst za kraj smene koji pominje trening ide u `endTipTrain` (prikazuje se samo kad tog dana ima treninga); `endTip` piši bez treninga.
 - Boje treninga: `blue`, `red`, `green`, `amber`, `violet`.
 
 ## Primer (izmišljena klijentkinja iz demo režima)

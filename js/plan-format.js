@@ -85,7 +85,9 @@ export var PLAN_FORMAT = [
   '      "wakeAt": "07:00", "shiftStartAt": "09:00", "shiftEndAt": "17:00", "trainingAt": "18:00", "coffeeAt": "15:00", "napAt": "", "cookAt": "19:30", "sleepAt": "23:00",',
   '      "dayEnd": 0,   // za noćnu smenu: sat do kog važi prethodni dan, npr. 9',
   '      "meals": [ { "key": "dorucak", "at": "07:30", "name": "Doručak", "what": "", "protein": 25, "box": true (kutija iz kuvanja), "work": true (obrok sa posla),',
+  '                   "post": true (obrok posle treninga; na dan bez treninga dobija restName ili Ručak/Večera), "restName": "",',
   '                   "freeName": "", "freeWhat": "", "freeProtein": 0, "freeAt": "" (zamena za slobodan dan) } ],',
+  '      "endTip": "" (bez pominjanja treninga), "endTipTrain": "" (samo za dane sa treningom),',
   '      "free": { "wakeAt": "08:30", "meals": [ … ] },   // poseban raspored za slobodne dane',
   '      "tips": [ "" ] } },',
   '  "weekTemplate": { "mon": { "work": true, "rhythm": "kljuc", "shift": "naziv dana", "workout": "A", "time": "18:00", "cook": "r1", "note": "" }, … "sun": {} },',
@@ -98,7 +100,8 @@ export var PLAN_FORMAT = [
   '  "supplements": [ { "name": "", "dose": "", "note": "" } ]',
   "}",
   "Vremena su HH:MM; posle ponoći piši 24:30, 26:00 itd. da ostanu u istom danu.",
-  "Kodovi treninga u weekTemplate i calendar moraju postojati u program.workouts; cook mora biti ključ iz recipes."
+  "Kodovi treninga u weekTemplate i calendar moraju postojati u program.workouts; cook mora biti ključ iz recipes.",
+  "Tekstovi koji se ponavljaju svaki dan (obroci, saveti, endTip) ne smeju da pretpostave da tog dana ima treninga; za to služe post/restName i endTipTrain, a za konkretan dan note u calendar."
 ].join("\n");
 
 var LANG_NAME = { sr: "srpski (latinica)", en: "engleski", ru: "ruski" };
