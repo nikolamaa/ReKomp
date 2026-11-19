@@ -1,8 +1,8 @@
 // Trenerski panel: klijenti, upitnik, sekcije, plan, unosi, pristup.
-import { $, qsa, esc, parseYmd, addDays, monday, num, f1, nowHM, copyText, toast, today } from "./util.js";
+import { $, qsa, esc, parseYmd, addDays, monday, num, f1, nowHM, copyText, toast, today, isIOS, isStandalone } from "./util.js";
 import { t, getLang, fmtShortDate, fmtRange, inviteText, langSelectHtml, LANGS } from "./i18n.js";
 import { SECTIONS, tx, fieldVisible, displayValue, isFlagged, parqPositive, sectionAnswered, defaultSections } from "./intake.js";
-import { validatePlan, claudePrompt } from "./plan-format.js";
+import { validatePlan, claudePrompt, initials } from "./plan-format.js";
 import { brandHtml } from "./client.js";
 import { computeInsights } from "./insights.js";
 import { FIELD_INDEX, optionLabel } from "./intake.js";
@@ -24,7 +24,55 @@ function planHas(k, p) {
 
 // ctx: { api, appName, appUrl, me, onPreview(client, plan), onOwnPlan, onLogout, onLang }
 export function mountAdmin(root, ctx) {
-  var S = { clients: [], showArchived: false, q: "", detail: null, ins: null, prWeeks: 8, prMetric: "weight", prHidden: {} };
+  var S = { clients: [], showArchived: false, q: "", detail: null, ins: null, prWeeks: 8, prMetric: "weight", prHidden: {}, menus: null, menusOk: false };
+
+  // Tekstualni fajl: preuzimanje, a u iPhone aplikaciji sa početnog ekrana deljenje (tamo preuzimanje ne radi pouzdano).
+  function downloadText(name, text) {
+    var file = null; try { file = new File([text], name, { type: "text/plain" }); } catch (e) { file = null; }
+    if (isIOS() && isStandalone() && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: name }).catch(function () {}); return;
+    }
+    var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" })); a.download = name;
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }
+
+  /* ---------- meniji sa posla (za proveru planova) ---------- */
+  async function loadMenus(force) {
+    if (S.menus && !force) return S.menus;
+    try { var list = await ctx.api.listWorkMenus(), m = {}; (list || []).forEach(function (x) { if (x && x.id) m[x.id] = x; }); S.menus = m; S.menusOk = true; }
+    catch (e) { S.menus = {}; S.menusOk = false; }   // tabela trainer_files još ne postoji
+    return S.menus;
+  }
+  function menuValid(x) {
+    if (!x || typeof x !== "object" || !/^[a-z0-9_-]{2,40}$/.test(String(x.id || "")) || !x.shifts || typeof x.shifts !== "object") return false;
+    return Object.keys(x.shifts).every(function (k) {
+      var sh = x.shifts[k]; return sh && typeof sh === "object" && Object.keys(sh).every(function (d) { return Array.isArray(sh[d]) && sh[d].every(function (v) { return typeof v === "string"; }); });
+    });
+  }
+  async function drawMenus() {
+    var el = $("aMenus"); if (!el) return;
+    await loadMenus();
+    if (!$("aMenus")) return;
+    var ids = Object.keys(S.menus).sort();
+    el.innerHTML = '<div class="card"><h3>' + esc(t("menus_title")) + '</h3><p class="small muted">' + esc(t("menus_hint")) + "</p>" +
+      (!S.menusOk ? '<p class="small form-err">' + esc(t("menus_missing_db")) + "</p>" :
+        (ids.length ? '<ul class="list">' + ids.map(function (id) { var m = S.menus[id]; return "<li><span><b>" + esc(m.name || id) + '</b> <span class="small muted">workplace: ' + esc(id) + "</span></span><span class=\"small muted\">" + esc(t("menu_updated", { x: /^\d{4}-\d{2}-\d{2}$/.test(m.updated || "") ? fmtShortDate(parseYmd(m.updated)) : (m.updated || "—") })) + "</span></li>"; }).join("") + "</ul>"
+          : '<p class="small muted">' + esc(t("menus_none")) + "</p>")) +
+      (S.menusOk ? '<div class="actions"><label class="btn ghost small" for="aMenuFile">' + esc(t("menus_load")) + '</label><input type="file" id="aMenuFile" accept=".json,.txt,application/json,text/plain" hidden><span class="status" id="aMenuSt" role="status"></span></div>' : "") + "</div>";
+    var inp = $("aMenuFile"); if (!inp) return;
+    inp.addEventListener("change", function () {
+      var f = inp.files[0]; inp.value = ""; if (!f) return;
+      var rd = new FileReader();
+      rd.onload = async function () {
+        var x = null; try { x = JSON.parse(String(rd.result || "").replace(/^\uFEFF/, "")); } catch (e) { x = null; }
+        if (!menuValid(x)) { $("aMenuSt").textContent = t("menus_bad"); return; }
+        $("aMenuSt").textContent = t("saving");
+        try { await ctx.api.saveWorkMenu(x); await loadMenus(true); await drawMenus(); toast(t("menus_saved")); }
+        catch (e) { $("aMenuSt").textContent = t("not_saved"); }
+      };
+      rd.readAsText(f);
+    });
+  }
 
   root.innerHTML = '<header class="top"><div class="wrap"><div class="brand">' + brandHtml(ctx.appName) + ' <small class="role">' + esc(t("trainer")) + '</small></div><div class="top-r">' +
     (ctx.me && ctx.me.clientId ? '<button type="button" class="icon-btn" id="aOwn">' + esc(t("my_plan")) + "</button>" : "") +
@@ -59,7 +107,7 @@ export function mountAdmin(root, ctx) {
       '<div class="row">' + STATUS.filter(function (s) { return counts[s]; }).map(function (s) { return '<span class="chip st-' + s + '">' + esc(t("st_" + s)) + " · " + counts[s] + "</span>"; }).join("") + "</div>" +
       '<input id="aSearch" type="search" placeholder="' + esc(t("search")) + '" aria-label="' + esc(t("search")) + '" value="' + esc(S.q) + '">' +
       '<label class="checkrow small"><input type="checkbox" id="aArch"' + (S.showArchived ? " checked" : "") + "><span>" + esc(t("show_archived")) + "</span></label></div>" +
-      '<div id="aOverview"></div><div id="aList" class="view"></div>';
+      '<div id="aOverview"></div><div id="aList" class="view"></div><div id="aMenus"></div>';
     $("aNew").addEventListener("click", function () { $("aNewForm").hidden = false; $("ncName").focus(); });
     $("ncCancel").addEventListener("click", function () { $("aNewForm").hidden = true; });
     $("aNewF").addEventListener("submit", async function (e) {
@@ -76,6 +124,7 @@ export function mountAdmin(root, ctx) {
     $("aArch").addEventListener("change", function () { S.showArchived = $("aArch").checked; drawList(); });
     drawList();
     drawOverview();
+    drawMenus();
   }
 
   /* ---------- pregled i napredak ---------- */
@@ -265,7 +314,7 @@ export function mountAdmin(root, ctx) {
     var h = '<div class="card"><div class="row small muted">' + (it.submitted_at ? "<span>" + esc(t("submitted_on", { x: fmtShortDate(new Date(it.submitted_at)) })) + "</span>" : "<span>" + esc(t("st_intake")) + "</span>") +
       (it.updated_at ? "<span>·</span><span>" + esc(t("updated_on", { x: fmtShortDate(new Date(it.updated_at)) })) + "</span>" : "") + "</div>" +
       (parq.length ? '<div class="hint bad">' + esc(t("parq_warn")) + "</div>" : "") +
-      '<div class="actions"><button type="button" class="btn small" id="iClaude">' + esc(t("copy_claude")) + "</button>" + (changed ? '<button type="button" class="btn ghost small" id="iSeen">' + esc(t("mark_seen")) + "</button>" : "") + '</div><p class="small muted">' + esc(t("copy_claude_hint")) + "</p></div>";
+      '<div class="actions"><button type="button" class="btn small" id="iClaude">' + esc(t("copy_claude")) + "</button>" + '<button type="button" class="btn ghost small" id="iClaudeTxt">' + esc(t("download_claude")) + "</button>" + (changed ? '<button type="button" class="btn ghost small" id="iSeen">' + esc(t("mark_seen")) + "</button>" : "") + '</div><p class="small muted">' + esc(t("copy_claude_hint")) + "</p></div>";
     SECTIONS.forEach(function (s) {
       if (s.id === "consent") return;
       var rows = s.fields.filter(function (f) { return fieldVisible(f, a) && displayValue(f, a[f.id], lang); }).map(function (f) {
@@ -277,6 +326,10 @@ export function mountAdmin(root, ctx) {
     });
     el.innerHTML = h;
     $("iClaude").addEventListener("click", async function () { toast((await copyText(claudePrompt(D.client, a))) ? t("copied") : t("error_generic")); });
+    $("iClaudeTxt").addEventListener("click", function () {
+      var tag = initials(D.client.name).replace(/[.\s]/g, "") || "klijent";
+      downloadText("upitnik_" + tag + "_" + today() + ".txt", claudePrompt(D.client, a));
+    });
     if ($("iSeen")) $("iSeen").addEventListener("click", async function () { await ctx.api.markSeen(D.id); await refreshDetail(); });
   }
 
@@ -319,7 +372,7 @@ export function mountAdmin(root, ctx) {
       });
     }
     function check() {
-      var r = validatePlan($("pJson").value);
+      var r = validatePlan($("pJson").value, { menus: S.menus || {} });
       $("pCheck").innerHTML = r.ok ? '<div class="hint ok">' + esc(t("json_ok", { x: r.summary })) + "</div>" + (r.warnings.length ? '<div class="hint warn">' + r.warnings.map(esc).join("<br>") + "</div>" : "")
         : '<div class="hint bad">' + esc(t("json_err", { x: "" })) + "<br>" + r.errors.slice(0, 12).map(esc).join("<br>") + "</div>";
       return r;
@@ -330,6 +383,7 @@ export function mountAdmin(root, ctx) {
       return D.plan;
     }
     $("pVal").addEventListener("click", check);
+    if (!S.menus) loadMenus().then(function () { if ($("pCheck") && $("pCheck").innerHTML) check(); });
     // Plan iz .txt / .json fajla (dugme ili prevlačenje fajla na polje)
     function loadFile(file) {
       if (!file) return;

@@ -25,6 +25,10 @@ Na početnoj strani panela je **Pregled klijenata**: ko treba pažnju i zašto (
 
 Poruke klijentu dodaješ na kartici **Plan** (deo **Poruke od trenera**). Pojavljuju se klijentu na ekranu Danas.
 
+Upitnik ne moraš da kopiraš: na kartici **Upitnik** dugme **Preuzmi za Claude (.txt)** pravi fajl sa uputstvom, formatom i odgovorima (bez imena i kontakta), koji samo prevučeš u čet.
+
+**Meniji sa posla:** na dnu početne strane panela učitaš meni firme kao .json (npr. `mbcare_meni.json`). Kad plan ima `"workplace": "mbcare"`, dugme **Proveri** javlja svako jelo sa posla koje tog dana nije na meniju. Meniji se čuvaju u bazi, u tabeli `trainer_files` (fajl `supabase/trainer_files.sql`, pokreće se jednom), a ne u javnom repou.
+
 ---
 
 ## Postavljanje (jednom, oko 20 minuta)

@@ -89,6 +89,14 @@ function supaApi(cfg) {
     async listWeeks(cid) {
       return unwrap(await sb.from("week_plans").select("week,days,updated_at").eq("client_id", cid));
     },
+    // meniji sa posla (samo trener)
+    async listWorkMenus() {
+      var rows = unwrap(await sb.from("trainer_files").select("key,data,updated_at").like("key", "menu:%"));
+      return rows.map(function (r) { return Object.assign({}, r.data, { id: r.key.slice(5), savedAt: r.updated_at }); });
+    },
+    async saveWorkMenu(menu) {
+      return unwrap(await sb.from("trainer_files").upsert({ key: "menu:" + menu.id, data: menu }).select("key").single());
+    },
     async saveWeek(cid, week, days) {
       return unwrap(await sb.from("week_plans").upsert({ client_id: cid, week: week, days: days }).select("week").single());
     },
@@ -144,9 +152,11 @@ function supaApi(cfg) {
     },
     async exportAll() {
       var T = { admins: ["user_id"], clients: ["id"], client_private: ["client_id"], client_members: ["user_id"], intakes: ["client_id"], plans: ["client_id"], daily_logs: ["client_id", "day"], sessions: ["client_id", "day", "workout"], week_plans: ["client_id", "week"] };
-      var out = {};
+      T.trainer_files = ["key"];
+      var OPTIONAL = ["week_plans", "trainer_files"], out = {};
       for (var name in T) {
-        out[name] = await fetchAll(function () { var q = sb.from(name).select("*"); T[name].forEach(function (c) { q = q.order(c); }); return q; });
+        try { out[name] = await fetchAll(function () { var q = sb.from(name).select("*"); T[name].forEach(function (c) { q = q.order(c); }); return q; }); }
+        catch (e) { if (OPTIONAL.indexOf(name) >= 0) out[name] = null; else throw e; }   // tabela možda još nije napravljena
       }
       return out;
     }
@@ -256,6 +266,8 @@ function demoApi() {
       return Object.keys(m).sort().map(function (w) { return { week: w, days: clone(m[w]) }; });
     },
     async saveWeek(cid, week, days) { var s = load(); guardClient(s, cid); s.weeks = s.weeks || {}; s.weeks[cid] = s.weeks[cid] || {}; s.weeks[cid][week] = clone(days); store(s); return { week: week }; },
+    async listWorkMenus() { var s = load(); guardAdmin(s); var m = s.menus || {}; return Object.keys(m).map(function (k) { return clone(m[k]); }); },
+    async saveWorkMenu(menu) { var s = load(); guardAdmin(s); s.menus = s.menus || {}; s.menus[menu.id] = Object.assign(clone(menu), { savedAt: nowIso() }); store(s); return { key: "menu:" + menu.id }; },
     async listSessions(cid) {
       var s = load(); guardClient(s, cid);
       var m = s.sessions[cid] || {};

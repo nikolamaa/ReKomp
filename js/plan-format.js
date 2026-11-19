@@ -6,9 +6,54 @@ var TIME = /^\d{1,2}:\d{2}$/;
 var DAY = /^\d{4}-\d{2}-\d{2}$/;
 var WEEK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 var KNOWN = ["version", "start", "baseline", "targets", "checkin", "notes", "program", "defaultRhythm", "rhythms", "weekTemplate",
-  "calendar", "workMenu", "recipes", "shopping", "nutritionRules", "rules", "supplements", "noTrainDays"];
+  "calendar", "workMenu", "recipes", "shopping", "nutritionRules", "rules", "supplements", "noTrainDays", "workplace"];
 
-export function validatePlan(text) {
+// ---------- Provera obroka sa posla prema meniju firme (meni je u bazi, kartica „Meniji sa posla“) ----------
+var DAY_SR = { mon: "ponedeljak", tue: "utorak", wed: "sreda", thu: "četvrtak", fri: "petak", sat: "subota", sun: "nedelja" };
+function normDish(x) {
+  return String(x || "").toLowerCase().replace(/đ/g, "dj").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\([^)]*\)/g, " ").replace(/\bobrok\s+i{1,3}\b\s*[-–]?/g, " ").replace(/-?\s*porcija\b/g, " ")
+    .replace(/prilozi po zelji/g, " ").replace(/[^a-z0-9&]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function shiftFor(menu, rk, r) {
+  if (menu.shifts[rk]) return rk;
+  var s = (rk + " " + ((r && r.label) || "")).toLowerCase();
+  if (/prva|jutarnj|\b1\b/.test(s) && menu.shifts.prva) return "prva";
+  if (/druga|popodnev|\b2\b/.test(s) && menu.shifts.druga) return "druga";
+  if (/tre[cć]a|no[cć]n|\b3\b/.test(s) && menu.shifts.treca) return "treca";
+  return null;
+}
+// Jelo je na meniju ako se glavni deo (bez salata i priloga, npr. „i kupus salata“) poklapa sa jelom za taj dan.
+function onMenu(dish, list, extra) {
+  var d = " " + normDish(dish) + " ";
+  (extra || []).map(normDish).filter(function (c) { return c.length >= 3; }).sort(function (a, b) { return b.length - a.length; })
+    .forEach(function (c) { d = d.split(" " + c + " ").join(" "); });
+  d = d.replace(/\s+/g, " ").trim();
+  for (var k = 0; k < 4; k++) d = d.replace(/^(i|sa|uz|bez|ili) /, "").replace(/ (i|sa|uz|bez|ili)$/, "");   // veznici ostali posle salate/priloga
+  if (d.length < 3) return true;   // samo salata ili prilog
+  return list.some(function (m) { var c = normDish(m); return c.length >= 3 && (d.indexOf(c) >= 0 || c.indexOf(d) >= 0); });
+}
+export function checkWorkMenu(p, menus) {
+  var out = [];
+  if (!p || !p.workplace) return out;
+  var menu = menus && menus[p.workplace];
+  if (!menu || !menu.shifts) { out.push("workplace „" + p.workplace + "“: meni te firme nije učitan u aplikaciju (Meniji sa posla), pa obroci sa posla nisu provereni."); return out; }
+  var wm = p.workMenu || {}, rh = p.rhythms || {};
+  Object.keys(wm).forEach(function (rk) {
+    var sk = shiftFor(menu, rk, rh[rk]);
+    if (!sk) { out.push("workMenu." + rk + ": ne znam kojoj smeni u meniju „" + (menu.name || p.workplace) + "“ odgovara."); return; }
+    var days = (wm[rk] && wm[rk].days) || {}, sh = menu.shifts[sk];
+    Object.keys(days).forEach(function (dk) {
+      var list = sh[dk] || [], e = days[dk] || {};
+      [e.pick].concat(e.alts || []).forEach(function (dish) {
+        if (dish && !onMenu(dish, list, sh.extra)) out.push("workMenu." + rk + "." + dk + ": „" + dish + "“ nije na meniju za " + (DAY_SR[dk] || dk) + " (" + sk + " smena).");
+      });
+    });
+  });
+  return out;
+}
+
+export function validatePlan(text, opts) {
   var errors = [], warnings = [], p;
   try { p = typeof text === "string" ? JSON.parse(text) : text; }
   catch (e) { return { ok: false, errors: ["JSON: " + e.message], warnings: [], plan: null, summary: "" }; }
@@ -62,6 +107,7 @@ export function validatePlan(text) {
   if (p.noTrainDays != null && (!Array.isArray(p.noTrainDays) || p.noTrainDays.some(function (d) { return WEEK.indexOf(d) < 0; }))) errors.push("noTrainDays must be a list of mon…sun");
   if (p.shopping && p.shopping.items && !Array.isArray(p.shopping.items)) errors.push("shopping.items must be a list");
   ["targets", "notes", "rules", "supplements", "nutritionRules"].forEach(function (k) { if (p[k] != null && !Array.isArray(p[k])) errors.push(k + " must be a list"); });
+  if (p.workplace) warnings = warnings.concat(checkWorkMenu(p, opts && opts.menus));
 
   var parts = [];
   if (workouts.length) parts.push(t("summary_workouts", { n: workouts.length }));
@@ -97,6 +143,7 @@ export var PLAN_FORMAT = [
   '  "weekTemplate": { "mon": { "work": true, "rhythm": "kljuc", "shift": "naziv dana", "workout": "A", "time": "18:00", "cook": "r1", "note": "" }, … "sun": {} },',
   '  "calendar": { "YYYY-MM-DD": { isto kao dan u weekTemplate } },   // izuzeci i smene po datumima; napomene vezane za trening stavi u workouts[].notes',
   '  "noTrainDays": [ "tue" ],   // dani kad klijent nikad ne može da trenira (stalna obaveza); predlog dana treninga ih preskače',
+  '  "workplace": "mbcare",   // posao sa fiksnim menijem; Proveri tada proverava workMenu prema meniju te firme',
   '  "workMenu": { "kljuc": { "days": { "mon": { "pick": "", "protein": 35, "alts": [ "" ], "tip": "" } } } },',
   '  "recipes": { "r1": { "name": "", "short": "", "perBox": "4 kutije · ~450 kcal · ~38 g", "time": "", "ingredients": [ "" ], "steps": [ "" ], "storage": [ "" ] } },',
   '  "shopping": { "currency": "RSD", "note": "", "items": [ { "name": "", "qty": "", "min": 0, "max": 0 } ] },',

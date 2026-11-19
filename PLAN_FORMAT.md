@@ -41,6 +41,7 @@ FORMAT PLANA (JSON objekat; svi delovi su neobavezni, izostavi ono za šta nema 
   "weekTemplate": { "mon": { "work": true, "rhythm": "kljuc", "shift": "naziv dana", "workout": "A", "time": "18:00", "cook": "r1", "note": "" }, … "sun": {} },
   "calendar": { "YYYY-MM-DD": { isto kao dan u weekTemplate } },   // izuzeci i smene po datumima; napomene vezane za trening stavi u workouts[].notes
   "noTrainDays": [ "tue" ],   // dani kad klijent nikad ne može da trenira (stalna obaveza); predlog dana treninga ih preskače
+  "workplace": "mbcare",   // posao sa fiksnim menijem; Proveri tada proverava workMenu prema meniju te firme
   "workMenu": { "kljuc": { "days": { "mon": { "pick": "", "protein": 35, "alts": [ "" ], "tip": "" } } } },
   "recipes": { "r1": { "name": "", "short": "", "perBox": "4 kutije · ~450 kcal · ~38 g", "time": "", "ingredients": [ "" ], "steps": [ "" ], "storage": [ "" ] } },
   "shopping": { "currency": "RSD", "note": "", "items": [ { "name": "", "qty": "", "min": 0, "max": 0 } ] },
