@@ -365,3 +365,16 @@ input[type="search"] { border-radius: 999px; }
 .pr-s { font-size: 0.8rem; color: var(--muted); }
 .pr-sort select { width: auto; padding: 4px 8px; font-size: 0.9rem; }
 .pr-svg .ax { font-size: 11px; }
+
+/* Moja nedelja: klijent bira slobodne dane, smenu i dane treninga */
+.wp-prompt { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.wp-days { display: flex; flex-direction: column; }
+.wp-day { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding-block: 8px; border-top: 1px solid var(--line); }
+.wp-day:first-child { border-top: 0; }
+.wp-day.past { opacity: 0.55; }
+.wp-day .dd { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; line-height: 1.1; }
+.wp-day .dd small { display: block; color: var(--muted); font-weight: 500; font-size: 0.85rem; }
+.wp-day select { padding: 10px; }
+.wp-train { min-height: 44px; min-width: 92px; max-width: 42vw; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--sunk); font: 600 0.9rem var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wp-train:not([aria-pressed="true"]) { color: var(--muted); }
+.wp-train[aria-pressed="true"] { background: var(--raised); border-color: currentColor; }

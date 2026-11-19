@@ -86,6 +86,12 @@ function supaApi(cfg) {
     async saveSession(cid, day, workout, data) {
       return unwrap(await sb.from("sessions").upsert({ client_id: cid, day: day, workout: workout, data: data }).select("day").single());
     },
+    async listWeeks(cid) {
+      return unwrap(await sb.from("week_plans").select("week,days,updated_at").eq("client_id", cid));
+    },
+    async saveWeek(cid, week, days) {
+      return unwrap(await sb.from("week_plans").upsert({ client_id: cid, week: week, days: days }).select("week").single());
+    },
 
     // trener
     async listClients() {
@@ -137,7 +143,7 @@ function supaApi(cfg) {
       return fetchAll(function () { return sb.from("sessions").select("client_id,day,workout,data").gte("day", since).order("day").order("client_id").order("workout"); });
     },
     async exportAll() {
-      var T = { admins: ["user_id"], clients: ["id"], client_private: ["client_id"], client_members: ["user_id"], intakes: ["client_id"], plans: ["client_id"], daily_logs: ["client_id", "day"], sessions: ["client_id", "day", "workout"] };
+      var T = { admins: ["user_id"], clients: ["id"], client_private: ["client_id"], client_members: ["user_id"], intakes: ["client_id"], plans: ["client_id"], daily_logs: ["client_id", "day"], sessions: ["client_id", "day", "workout"], week_plans: ["client_id", "week"] };
       var out = {};
       for (var name in T) {
         out[name] = await fetchAll(function () { var q = sb.from(name).select("*"); T[name].forEach(function (c) { q = q.order(c); }); return q; });
@@ -157,7 +163,7 @@ function supaApi(cfg) {
 }
 
 /* ======================= Demo (localStorage) ======================= */
-var DEMO_KEY = "rekomp-demo-v1";
+var DEMO_KEY = "rekomp-demo-v2";
 
 function demoApi() {
   function load() {
@@ -244,6 +250,12 @@ function demoApi() {
       return Object.keys(m).sort().map(function (d) { return { day: d, data: clone(m[d]) }; });
     },
     async saveDaily(cid, day, data) { var s = load(); guardClient(s, cid); s.daily[cid] = s.daily[cid] || {}; s.daily[cid][day] = clone(data); store(s); return { day: day }; },
+    async listWeeks(cid) {
+      var s = load(); guardClient(s, cid);
+      var m = (s.weeks || {})[cid] || {};
+      return Object.keys(m).sort().map(function (w) { return { week: w, days: clone(m[w]) }; });
+    },
+    async saveWeek(cid, week, days) { var s = load(); guardClient(s, cid); s.weeks = s.weeks || {}; s.weeks[cid] = s.weeks[cid] || {}; s.weeks[cid][week] = clone(days); store(s); return { week: week }; },
     async listSessions(cid) {
       var s = load(); guardClient(s, cid);
       var m = s.sessions[cid] || {};
@@ -275,7 +287,7 @@ function demoApi() {
       var s = load(); guardAdmin(s);
       s.clients = s.clients.filter(function (x) { return x.id !== id; });
       s.members = s.members.filter(function (m) { return m.client_id !== id; });
-      delete s.intakes[id]; delete s.plans[id]; delete s.daily[id]; delete s.sessions[id]; delete s.private[id];
+      delete s.intakes[id]; delete s.plans[id]; delete s.daily[id]; delete s.sessions[id]; delete s.private[id]; if (s.weeks) delete s.weeks[id];
       store(s);
     },
     async newInviteCode(id) { return this.updateClient(id, { invite_code: randomCode(8) }); },

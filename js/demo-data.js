@@ -169,7 +169,7 @@ export var DEMO_SEED = {
   admins: ["demo-trainer"],
   clients: [
     { id: "c-ana", name: "Ana Petrović (primer)", lang: "sr", invite_code: null, status: "active",
-      sections: { today: true, training: true, nutrition: true, calendar: true, progress: true, rules: true, supplements: true },
+      sections: { today: true, training: true, nutrition: true, calendar: true, weekpick: true, progress: true, rules: true, supplements: true },
       created_at: addDays(T0, -20) + "T10:00:00Z", updated_at: addDays(T0, -14) + "T10:00:00Z" },
     { id: "c-marko", name: "Marko Jovanović (primer)", lang: "sr", invite_code: null, status: "review", sections: {},
       created_at: addDays(T0, -4) + "T10:00:00Z", updated_at: addDays(T0, -1) + "T10:00:00Z" },

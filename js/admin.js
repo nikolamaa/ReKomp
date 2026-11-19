@@ -7,8 +7,8 @@ import { brandHtml } from "./client.js";
 import { computeInsights } from "./insights.js";
 import { FIELD_INDEX, optionLabel } from "./intake.js";
 
-var SECTION_KEYS = ["today", "training", "nutrition", "calendar", "progress", "rules", "supplements"];
-var SECTION_LABEL = { today: "sec_today", training: "sec_training", nutrition: "sec_nutrition", calendar: "sec_calendar", progress: "sec_progress", rules: "sec_rules", supplements: "sec_supplements" };
+var SECTION_KEYS = ["today", "training", "nutrition", "calendar", "weekpick", "progress", "rules", "supplements"];
+var SECTION_LABEL = { today: "sec_today", training: "sec_training", nutrition: "sec_nutrition", calendar: "sec_calendar", weekpick: "sec_weekpick", progress: "sec_progress", rules: "sec_rules", supplements: "sec_supplements" };
 var STATUS = ["invited", "intake", "review", "active", "archived"];
 
 function planHas(k, p) {
@@ -16,7 +16,7 @@ function planHas(k, p) {
   if (k === "today" || k === "progress") return true;
   if (k === "training") return !!(p.program && (p.program.workouts || []).length);
   if (k === "nutrition") return !!(Object.keys(p.rhythms || {}).some(function (r) { return (p.rhythms[r].meals || []).length; }) || Object.keys(p.recipes || {}).length || (p.shopping && (p.shopping.items || []).length));
-  if (k === "calendar") return !!(Object.keys(p.calendar || {}).length || Object.keys(p.weekTemplate || {}).length);
+  if (k === "calendar" || k === "weekpick") return !!(Object.keys(p.calendar || {}).length || Object.keys(p.weekTemplate || {}).length);
   if (k === "rules") return !!(p.rules || []).length;
   if (k === "supplements") return !!(p.supplements || []).length;
   return false;
@@ -286,6 +286,7 @@ export function mountAdmin(root, ctx) {
     var defs = defaultSections(a, prog), cur = D.client.sections || {}, hasSaved = Object.keys(cur).length > 0, p = D.plan ? D.plan.data : {};
     var intakeFor = {};
     SECTIONS.forEach(function (s) { if (sectionAnswered(s, a)) s.feeds.forEach(function (k) { intakeFor[k] = true; }); });
+    if (defs.weekpick) intakeFor.weekpick = true;
     el.innerHTML = '<div class="card"><p class="small muted">' + esc(t("sections_hint")) + '</p><div class="toggles">' + SECTION_KEYS.map(function (k) {
       var val = hasSaved ? !!cur[k] : (k === "today" || k === "progress" || !!defs[k]);
       return '<label class="toggle"><input type="checkbox" data-sec="' + k + '"' + (val ? " checked" : "") + '><span class="tg-l"><b>' + esc(t(SECTION_LABEL[k])) + "</b><small>" +

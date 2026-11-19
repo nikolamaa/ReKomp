@@ -28,7 +28,7 @@ export function mountClient(root, ctx) {
   WORKOUTS.forEach(function (w, i) { WK[w.code] = w; w._color = COLORS.indexOf(w.color) >= 0 ? w.color : COLORS[i % COLORS.length]; });
   var CI = Object.assign({ weight: true, sleep: true, pain: false, waist: true }, P.checkin || {});
   var lang = getLang();
-  var S = { daily: {}, sessions: {}, loaded: false, view: "danas", trCode: null, trDate: null, trKey: null, trDirty: false,
+  var S = { daily: {}, sessions: {}, weeks: {}, wp: null, loaded: false, view: "danas", trCode: null, trDate: null, trKey: null, trDirty: false,
     ciEdit: false, ciPain: null, ciDirty: false, wkStart: null, calScrolled: false, timer: null };
 
   /* ---------- sections ---------- */
@@ -41,16 +41,34 @@ export function mountClient(root, ctx) {
     if (k === "supplements") return !!((P.supplements || []).length);
     return false;
   }
-  function on(k) { return (k in SEC ? !!SEC[k] : true) && hasContent(k); }
+  function on(k) {
+    if (k === "weekpick") return !!SEC.weekpick && hasContent("calendar");   // uključuje se samo ručno ili iz upitnika
+    return (k in SEC ? !!SEC[k] : true) && hasContent(k);
+  }
   var TABS = ["training", "nutrition", "today", "calendar", "progress"].filter(function (k) { return k === "today" || on(k); });
   var showPlan = on("rules") || on("supplements");
 
   /* ---------- day logic ---------- */
-  function dayEntry(date) {
+  // Dan po planu trenera (weekTemplate + calendar), bez izbora klijenta.
+  function baseEntry(date) {
     var cal = P.calendar && P.calendar[date];
     var wt = P.weekTemplate && P.weekTemplate[weekdayKey(date)];
     if (!cal && !wt) return null;
     var e = Object.assign({}, wt || {}, cal || {}); e._template = !cal; return e;
+  }
+  function picked(date) { var w = on("weekpick") ? S.weeks[monday(date)] : null; return w && w[date] ? w[date] : null; }
+  // Izbor klijenta za tu nedelju (slobodan dan, smena, trening) ima prednost nad planom; napomena i kuvanje ostaju iz plana.
+  function dayEntry(date) {
+    var b = baseEntry(date), o = picked(date);
+    if (!o) return b;
+    b = b || {};
+    var e = Object.assign({}, b, { work: !!o.work, workout: o.workout && WK[o.workout] ? o.workout : null, _picked: true });
+    if (o.rhythm && RH[o.rhythm]) e.rhythm = o.rhythm;
+    var same = e.work === !!b.work && (e.rhythm || null) === (b.rhythm || null);
+    if (!same) delete e.shift;
+    if (!same || e.workout !== (b.workout || null)) delete e.time;
+    if (!e.workout) delete e.time;
+    return e;
   }
   function rhythmKey(date) {
     var e = dayEntry(date);
@@ -94,10 +112,15 @@ export function mountClient(root, ctx) {
     var h = at == null ? -1 : Math.floor(at / 60) % 24;
     return h >= 11 && h < 16 ? t("meal_lunch") : (h >= 16 && h < 21 ? t("meal_dinner") : t("meal_generic"));
   }
+  // Uobičajeno vreme treninga: za slobodan dan free.trainingAt, ako ga ritam ima.
+  function defaultTrainAt(date) {
+    var r = rhythmOf(date) || {};
+    return hm(!isWork(date) && r.free && r.free.trainingAt ? r.free.trainingAt : r.trainingAt);
+  }
   function trainAt(date) {
-    var tr = trainOf(date), r = rhythmOf(date);
+    var tr = trainOf(date);
     if (!tr || tr.away || tr.easy === "walk") return null;
-    var at = hm(tr.time); return at != null ? at : hm(r && r.trainingAt);
+    var at = hm(tr.time); return at != null ? at : defaultTrainAt(date);
   }
   function mealsFor(date) {
     var r = rhythmOf(date); if (!r) return null;
@@ -165,6 +188,7 @@ export function mountClient(root, ctx) {
     '<main class="wrap" id="cMain">' +
     '<section id="v-danas" class="view">' +
       '<div id="hero" class="card hero"><p class="muted">' + esc(t("loading")) + "</p></div>" +
+      '<div id="weekCard" class="card wp-prompt" hidden></div>' +
       '<div id="installCard" class="card" hidden></div>' +
       '<div id="checkin" class="card" hidden></div>' +
       '<div id="schedCard" class="card" hidden><div class="card-h"><h2>' + esc(t("schedule_title")) + '</h2><span id="protTotal" class="pill" hidden></span></div><ol id="timeline" class="tl"></ol><div id="extras" class="extras"></div><p id="dayTip" class="small muted"></p><span id="tlStatus" class="status" role="status"></span></div>' +
@@ -176,13 +200,15 @@ export function mountClient(root, ctx) {
     '<section id="v-progress" class="view" hidden></section>' +
     '<section id="v-plan" class="view" hidden></section>' +
     '<section id="v-profile" class="view" hidden></section>' +
+    '<section id="v-week" class="view" hidden></section>' +
     "</main>" +
     (TABS.length > 1 ? '<nav class="tabs" aria-label="' + esc(t("tab_today")) + '"><div class="inner" style="grid-template-columns:repeat(' + TABS.length + ',minmax(0,1fr))">' + TABS.map(tabBtn).join("") + "</div></nav>" : "");
   document.body.classList.toggle("no-tabs", TABS.length <= 1);
 
-  var VIEWS = ["danas", "training", "nutrition", "calendar", "progress", "plan", "profile"];
+  var VIEWS = ["danas", "training", "nutrition", "calendar", "progress", "plan", "profile", "week"];
   function go(view) {
     if (VIEWS.indexOf(view) < 0) view = "danas";
+    if (view === "week" && !S.wp) view = "danas";
     if (view === "training" && !on("training")) view = "danas";
     if (view === "nutrition" && !on("nutrition")) view = "danas";
     if (view === "calendar" && !on("calendar")) view = "danas";
@@ -223,7 +249,7 @@ export function mountClient(root, ctx) {
     });
     var tr = on("training") ? trainOf(day) : null;
     if (tr && !tr.away) {
-      var at = hm(tr.time) != null ? hm(tr.time) : hm(r.trainingAt), w = WK[tr.code];
+      var at = hm(tr.time) != null ? hm(tr.time) : defaultTrainAt(day), w = WK[tr.code];
       var ttl = tr.easy === "walk" ? t("easy_walk") : t("training_word") + ": " + (w.title || tr.code) + (tr.easy === "light" ? " · " + t("easy_light_tag") : "");
       var sub = tr.easy === "walk" ? t("easy_walk_sub") : (tr.easy === "light" ? t("easy_light_sub") : [w.focus, w.duration].filter(Boolean).join(" · ") + (tr.note ? ". " + tr.note : ""));
       if (tr.movedIn) sub = t("easy_moved_in") + ". " + sub;
@@ -623,6 +649,104 @@ export function mountClient(root, ctx) {
     $("shopTotal").textContent = "≈ " + lo.toLocaleString(loc) + (hi !== lo ? "–" + hi.toLocaleString(loc) : "") + (cur ? " " + cur : "");
   }
 
+  /* ---------- Moja nedelja: klijent bira slobodne dane, smenu i dane treninga ---------- */
+  // Kartica na Danas: subota i nedelja pitaju za sledeću nedelju, ponedeljak za tekuću.
+  function promptWeek() {
+    var td = ymd(new Date()), wd = parseYmd(td).getDay();
+    if (wd === 6 || wd === 0) return addDays(monday(td), 7);
+    if (wd === 1) return td;
+    return null;
+  }
+  function weekDays(m) { var out = []; for (var i = 0; i < 7; i++) out.push(addDays(m, i)); return out; }
+  // Redosled treninga po planu za tu nedelju; ako ga nema, po šablonu, pa po listi treninga.
+  function weekSeq(m) {
+    function codeOf(e) { return e && e.workout && WK[e.workout] ? e.workout : null; }
+    var seq = weekDays(m).map(function (d) { return codeOf(baseEntry(d)); }).filter(Boolean);
+    if (!seq.length && P.weekTemplate) seq = weekDays(m).map(function (d) { return codeOf(P.weekTemplate[weekdayKey(d)]); }).filter(Boolean);
+    if (!seq.length) seq = WORKOUTS.map(function (w) { return w.code; });
+    return seq;
+  }
+  function rhOf(e) { return e && e.rhythm && RH[e.rhythm] ? e.rhythm : (P.defaultRhythm && RH[P.defaultRhythm] ? P.defaultRhythm : (RH_KEYS[0] || null)); }
+  function rowOf(e) {
+    var work = !!(e && e.work);
+    return { v: work ? (RH_KEYS.length > 1 ? rhOf(e) : "work") : "", train: !!(e && e.workout && WK[e.workout]) };
+  }
+  function openWeek(m) {
+    var rows = {};
+    weekDays(m).forEach(function (d) { rows[d] = rowOf(dayEntry(d)); });
+    S.wp = { m: m, rows: rows, from: S.view === "week" ? "danas" : S.view, saved: "" };
+    renderWeek(); go("week");
+  }
+  function wpAssign() {
+    var seq = weekSeq(S.wp.m), i = 0, out = {};
+    weekDays(S.wp.m).forEach(function (d) { if (S.wp.rows[d].train && seq.length) { out[d] = seq[i % seq.length]; i++; } });
+    return out;
+  }
+  // Šta se čuva: { datum: { work, rhythm, workout } }. Slobodan dan prati smenu najbližeg radnog dana te nedelje (prvo dan pre).
+  function wpDays() {
+    var asg = wpAssign(), days = {}, list = weekDays(S.wp.m);
+    function shiftAt(d) { var v = d && S.wp.rows[d] ? S.wp.rows[d].v : ""; return v && v !== "work" ? v : null; }
+    list.forEach(function (d, i) {
+      var v = S.wp.rows[d].v, work = v !== "", rk = work ? shiftAt(d) : null;
+      for (var j = 1; !work && !rk && j < 7; j++) rk = shiftAt(list[i - j]) || shiftAt(list[i + j]);
+      if (!rk) rk = rhOf(baseEntry(d));
+      days[d] = { work: work, rhythm: rk && RH[rk] ? rk : null, workout: asg[d] || null };
+    });
+    return days;
+  }
+  function renderWeekCard() {
+    var el = $("weekCard"), m = on("weekpick") && !ctx.readonly && S.weeksOk ? promptWeek() : null;
+    if (!m || S.weeks[m]) { el.hidden = true; el.innerHTML = ""; return; }
+    var thisWk = m === monday(ymd(new Date())), rng = fmtRange(parseYmd(m), parseYmd(addDays(m, 6)));
+    el.innerHTML = "<h2>" + esc(t(thisWk ? "wp_this_title" : "wp_next_title")) + "</h2><p>" + esc(t(thisWk ? "wp_prompt_this" : "wp_prompt_next", { x: rng })) + "</p>" +
+      '<div class="actions"><button type="button" class="btn" data-wp="' + m + '">' + esc(t("wp_set")) + "</button></div>";
+    el.hidden = false;
+  }
+  function renderWeek() {
+    var v = $("v-week"); if (!S.wp) { v.innerHTML = ""; return; }
+    var m = S.wp.m, list = weekDays(m), asg = wpAssign(), seq = weekSeq(m), n = Object.keys(asg).length, td = ymd(new Date());
+    var opts = [["", t("wp_free")]].concat(RH_KEYS.length > 1 ? RH_KEYS.map(function (k) { return [k, RH[k].label || k]; }) : [["work", t("wp_work")]]);
+    var run = 0, row3 = false;
+    list.forEach(function (d) { run = S.wp.rows[d].train ? run + 1 : 0; if (run >= 3) row3 = true; });
+    var title = m === monday(td) ? t("wp_this_title") : (m > td ? t("wp_next_title") : t("wp_title")), dis = ctx.readonly ? " disabled" : "";
+    v.innerHTML = '<div class="card"><div class="card-h"><h2>' + esc(title) + '</h2><button type="button" class="btn ghost small" id="wpBack">' + esc(t("back")) + "</button></div>" +
+      '<span class="label">' + esc(fmtRange(parseYmd(m), parseYmd(addDays(m, 6)))) + "</span>" +
+      '<p class="small muted">' + esc(t("wp_hint")) + "</p>" +
+      '<div class="wp-days">' + list.map(function (d) {
+        var dd = parseYmd(d), r = S.wp.rows[d], lbl = fmtShortDate(dd);
+        return '<div class="wp-day' + (d < td ? " past" : "") + '"><div class="dd">' + esc(lbl.split(" ")[0]) + "<small>" + dd.getDate() + "." + (dd.getMonth() + 1) + ".</small></div>" +
+          '<select data-wp-shift="' + d + '" aria-label="' + esc(t("wp_shift_of", { x: lbl })) + '"' + dis + ">" +
+          opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === r.v ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("") + "</select>" +
+          (seq.length ? '<button type="button" class="wp-train' + (asg[d] ? " c-" + wColor(asg[d]) : "") + '" data-wp-train="' + d + '" aria-pressed="' + (r.train ? "true" : "false") + '"' + dis + ">" + esc(asg[d] ? wTitle(asg[d]) : t("wp_train")) + "</button>" : "") +
+          "</div>";
+      }).join("") + "</div>" +
+      (seq.length ? '<p class="small"><b>' + esc(t("wp_count", { n: n, m: seq.length })) + "</b>" + (n !== seq.length ? " · " + esc(t("wp_warn_count", { m: seq.length })) : "") + "</p>" : "") +
+      (row3 ? '<div class="hint warn">' + esc(t("wp_warn_row")) + "</div>" : "") +
+      '<div class="actions"><button type="button" class="btn" id="wpSave"' + dis + ">" + esc(t("wp_save")) + "</button>" +
+      (ctx.readonly ? "" : '<button type="button" class="btn ghost small" id="wpSame">' + esc(t("wp_same")) + '</button><button type="button" class="btn ghost small" id="wpReset">' + esc(t("wp_reset")) + "</button>") +
+      '<span class="status" id="wpSt" role="status">' + esc(S.wp.saved) + "</span></div></div>";
+  }
+  root.addEventListener("change", function (e) {
+    var d = e.target && e.target.dataset ? e.target.dataset.wpShift : null; if (!d || !S.wp) return;
+    S.wp.rows[d].v = e.target.value; S.wp.saved = ""; renderWeek();
+  });
+  root.addEventListener("click", async function (e) {
+    var el = e.target.closest && e.target.closest("[data-wp],[data-wp-train],#wpBack,#wpSave,#wpSame,#wpReset");
+    if (!el) return;
+    if (el.dataset.wp) { openWeek(el.dataset.wp); return; }
+    if (!S.wp) return;
+    if (el.dataset.wpTrain) { var r = S.wp.rows[el.dataset.wpTrain]; r.train = !r.train; S.wp.saved = ""; renderWeek(); return; }
+    if (el.id === "wpBack") { var f = S.wp.from; S.wp = null; go(f); return; }
+    if (el.id === "wpSame") { var pm = addDays(S.wp.m, -7); weekDays(S.wp.m).forEach(function (d, i) { S.wp.rows[d] = rowOf(dayEntry(addDays(pm, i))); }); S.wp.saved = ""; renderWeek(); return; }
+    if (el.id === "wpReset") { weekDays(S.wp.m).forEach(function (d) { S.wp.rows[d] = rowOf(baseEntry(d)); }); S.wp.saved = ""; renderWeek(); return; }
+    if (el.id === "wpSave" && !ctx.readonly) {
+      var days = wpDays(), m = S.wp.m;
+      $("wpSt").textContent = t("saving"); el.disabled = true;
+      try { await ctx.api.saveWeek(ctx.clientId, m, days); S.weeks[m] = days; S.wp.saved = t("wp_saved"); renderAll(); renderWeek(); }
+      catch (err) { $("wpSt").textContent = t("not_saved"); el.disabled = false; }
+    }
+  });
+
   /* ---------- Kalendar ---------- */
   function scrollCal() { if (S.view !== "calendar" || S.calScrolled) return; var el = $("cal-" + activeDay()); if (!el) return; S.calScrolled = true; el.scrollIntoView({ block: "center" }); }
   function renderCal() {
@@ -641,7 +765,9 @@ export function mountClient(root, ctx) {
     if (!groups.length) { v.innerHTML = '<div class="card"><p class="muted">' + esc(t("nothing_here")) + "</p></div>"; return; }
     v.innerHTML = '<div class="card"><h2>' + esc(t("tab_calendar")) + '</h2><p class="small muted">' + esc(t("cal_text")) + "</p></div>" + groups.map(function (g) {
       var work = g.days.filter(isWork), chip = RH_KEYS.length > 1 && work.length ? '<span class="chip ' + shiftClass(work[0]) + '">' + esc((rhythmOf(work[0]) || {}).label || "") + "</span>" : "";
-      return '<div class="card"><div class="week-h"><h3>' + esc(fmtRange(parseYmd(g.m), parseYmd(addDays(g.m, 6)))) + "</h3>" + chip + "</div><div>" + g.days.map(function (k) {
+      var cm = monday(td), wpBtn = on("weekpick") && !ctx.readonly && S.weeksOk && (g.m === cm || g.m === addDays(cm, 7)) ?
+        '<button type="button" class="linkbtn" data-wp="' + g.m + '">' + esc(t(S.weeks[g.m] ? "wp_edit" : "wp_set")) + "</button>" : "";
+      return '<div class="card"><div class="week-h"><h3>' + esc(fmtRange(parseYmd(g.m), parseYmd(addDays(g.m, 6)))) + "</h3>" + chip + wpBtn + "</div><div>" + g.days.map(function (k) {
         var e = dayEntry(k), cls = k < td ? "past" : (k === td ? "is-today" : ""), dd = parseYmd(k), rc = e.cook ? REC[e.cook] : null;
         var done = e.workout && sessionDone(S.sessions[k + "_" + e.workout]), sl = shiftLabel(k);
         return '<div class="day ' + cls + '" id="cal-' + k + '"><div class="dd">' + esc(fmtShortDate(dd).split(" ")[0]) + "<small>" + dd.getDate() + "." + (dd.getMonth() + 1) + '.</small></div><div class="body"><div class="row">' +
@@ -743,7 +869,7 @@ export function mountClient(root, ctx) {
 
   /* ---------- start ---------- */
   function renderAll() {
-    renderDanas(); renderCal(); renderProgress(); renderPlan();
+    renderDanas(); renderWeekCard(); renderCal(); renderProgress(); renderPlan();
     if (S.trCode == null && WORKOUTS.length) { S.trCode = defaultWorkout(); S.trDate = activeDay(); if ($("trDate")) $("trDate").value = S.trDate; renderTrForm(true); }
     else renderTrForm(false);
   }
@@ -757,6 +883,12 @@ export function mountClient(root, ctx) {
       var sm = {}; (s || []).forEach(function (r) { sm[r.day + "_" + r.workout] = Object.assign({}, r.data, { date: r.day, workout: r.workout }); });
       Object.keys(S.daily).forEach(function (k) { if (!dm[k]) dm[k] = S.daily[k]; });
       S.daily = dm; S.sessions = sm; S.loaded = true;
+      // Nedeljni izbori klijenta; ako tabela još ne postoji u bazi, aplikacija radi po planu.
+      try {
+        var w = await ctx.api.listWeeks(ctx.clientId), wm = {};
+        (w || []).forEach(function (r) { wm[r.week] = r.days || {}; });
+        S.weeks = wm; S.weeksOk = true;
+      } catch (e2) { S.weeksOk = false; }
       renderAll();
     } catch (e) { /* offline: keep what we have */ }
   }

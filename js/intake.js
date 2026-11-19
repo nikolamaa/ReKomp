@@ -277,7 +277,18 @@ export var SECTIONS = [
         O("fixed", "Ne, imam fiksno radno vreme", "No, fixed working hours", "Нет, фиксированный график"), O("two", "Dve smene", "Two shifts", "Две смены"),
         O("three", "Tri smene", "Three shifts", "Три смены"), O("night", "Samo noćna", "Nights only", "Только ночные"), O("irregular", "Nepravilno ili po turnusima", "Irregular or rotating", "Нерегулярно или вахтой")] },
       { id: "work_hours", type: "text", showIf: { f: "shift", eq: "fixed" }, label: L("Radno vreme (npr. 9–17)", "Working hours (e.g. 9–5)", "Часы работы (например, 9–17)") },
-      { id: "shift_details", type: "textarea", showIf: { f: "shift", notIn: ["fixed", ""] }, label: L("Opiši smene: radno vreme svake smene, redosled, koliko traje svaka i kako se menjaju slobodni dani", "Describe your shifts: hours of each, the order, how long each lasts and how days off change", "Опиши смены: часы каждой, порядок, длительность и как меняются выходные") },
+      { id: "shift_details", type: "textarea", showIf: { f: "shift", notIn: ["fixed", ""] }, label: L("Opiši smene: radno vreme svake smene, redosled i koliko traje svaka (npr. nedelju dana)", "Describe your shifts: hours of each, the order and how long each lasts (e.g. one week)", "Опиши смены: часы каждой, порядок и сколько длится каждая (например, неделю)") },
+      { id: "shift_now", type: "text", showIf: { f: "shift", notIn: ["fixed", ""] }, label: L("Koja ti je smena sada i kada se sledeći put menja?", "Which shift are you on now and when does it change next?", "Какая у тебя смена сейчас и когда она сменится?") },
+      { id: "days_off", type: "single", label: L("Kakvi su ti slobodni dani?", "What are your days off like?", "Какие у тебя выходные?"), options: [
+        O("weekend", "Uvek vikend", "Always the weekend", "Всегда суббота и воскресенье"),
+        O("fixed", "Uvek isti dani, ali ne vikend", "Always the same days, but not the weekend", "Всегда одни и те же дни, но не выходные"),
+        O("rotating", "Menjaju se iz nedelje u nedelju", "They change from week to week", "Меняются каждую неделю"),
+        O("none", "Nemam stalne slobodne dane", "I have no regular days off", "Нет постоянных выходных")] },
+      { id: "days_off_which", type: "text", showIf: { f: "days_off", eq: "fixed" }, label: L("Koji su to dani?", "Which days?", "Какие это дни?") },
+      { id: "schedule_known", type: "single", showIf: { f: "days_off", in: ["rotating", "none"] }, label: L("Kada saznaš raspored za sledeću nedelju?", "When do you find out next week's schedule?", "Когда узнаёшь график на следующую неделю?"), options: [
+        O("month", "Znam ga unapred za ceo mesec ili duže", "I know it a month or more ahead", "Знаю на месяц вперёд или больше"),
+        O("week", "Do kraja tekuće nedelje", "By the end of the current week", "До конца текущей недели"),
+        O("late", "Tek u ponedeljak ili kasnije", "Only on Monday or later", "Только в понедельник или позже")] },
       { id: "commute", type: "text", label: L("Koliko ti treba do posla i do teretane?", "How long does it take you to get to work and to the gym?", "Сколько времени дорога до работы и до зала?") },
       { id: "sleep_hours", type: "number", unit: "h", min: 2, max: 14, step: 0.5, label: L("Koliko sati spavaš prosečno?", "How many hours do you sleep on average?", "Сколько часов в среднем спишь?") },
       { id: "sleep_quality", type: "scale", min: 1, max: 5, label: L("Kvalitet sna", "Sleep quality", "Качество сна"), ends: L("1 = loš · 5 = odličan", "1 = poor · 5 = excellent", "1 = плохое · 5 = отличное") },
@@ -476,6 +487,8 @@ export function defaultSections(answers, progress) {
     var filled = progress && progress[s.id] === "done" ? sectionAnswered(s, answers) : sectionAnswered(s, answers);
     if (filled) s.feeds.forEach(function (k) { on[k] = true; });
   });
+  // Klizni slobodni dani: klijent sam bira nedelju (slobodni dani, smena, treninzi).
+  if (answers && (answers.days_off === "rotating" || answers.days_off === "none")) on.weekpick = true;
   return on;
 }
 

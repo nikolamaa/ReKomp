@@ -36,7 +36,7 @@ FORMAT PLANA (JSON objekat; svi delovi su neobavezni, izostavi ono za šta nema 
                    "post": true (obrok posle treninga), "restName": "" (naziv kad nema treninga),
                    "freeName": "", "freeWhat": "", "freeProtein": 0, "freeAt": "" (zamena za slobodan dan) } ],
       "endTip": "", "endTipTrain": "",   // savet za kraj smene; endTipTrain samo za dane sa treningom
-      "free": { "wakeAt": "08:30", "meals": [ … ] },   // poseban raspored za slobodne dane
+      "free": { "wakeAt": "08:30", "trainingAt": "10:00", "meals": [ … ] },   // poseban raspored za slobodne dane
       "tips": [ "" ] } },
   "weekTemplate": { "mon": { "work": true, "rhythm": "kljuc", "shift": "naziv dana", "workout": "A", "time": "18:00", "cook": "r1", "note": "" }, … "sun": {} },
   "calendar": { "YYYY-MM-DD": { isto kao dan u weekTemplate } },   // izuzeci i smene po datumima
@@ -53,6 +53,7 @@ Kodovi treninga u weekTemplate i calendar moraju postojati u program.workouts; c
 
 Napomene:
 - `weekTemplate` važi za svaku nedelju; `calendar` po datumu ima prednost (smene, slobodni dani, izuzeci).
+- **Moja nedelja** (sekcija na kartici Sekcije, za klizne slobodne dane): klijent svake nedelje sam bira slobodne dane, smenu (ključ iz `rhythms`) i dane treninga. Njegov izbor ima prednost nad `weekTemplate` i `calendar` za slobodan dan, smenu i trening; `note` i `cook` ostaju iz plana. Broj i redosled treninga uzimaju se iz plana za tu nedelju, a vreme treninga iz ritma (`trainingAt`, za slobodan dan `free.trainingAt`). Zato za takve klijente `weekTemplate` napravi kao uobičajenu nedelju, a svaki ritam neka ima i `free` raspored.
 - Za noćnu smenu: `dayEnd` (npr. 9) znači da do 09:00 aplikacija i dalje prikazuje prethodni dan, a vremena posle ponoći pišeš kao 24:30, 26:00…
 - `box: true` u obroku znači kutiju iz poslednjeg kuvanja (`cook` u rasporedu), `work: true` obrok sa posla (`workMenu`).
 - Obrok posle treninga označi sa `"post": true` (ili ga nazovi „Posle treninga“). Na dan bez treninga, kad je trening pomeren ili zamenjen šetnjom, aplikacija ga sama preimenuje u `restName` (npr. „Ručak“) ili u Ručak/Večera/Obrok po vremenu. Kad trening počinje kasnije, obrok se pomera na 90 min posle početka treninga.
