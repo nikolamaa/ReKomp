@@ -30,7 +30,7 @@ FORMAT PLANA (JSON objekat; svi delovi su neobavezni, izostavi ono za šta nema 
       "notes": [ "" ] } ] },
   "defaultRhythm": "ključ iz rhythms",
   "rhythms": { "kljuc": { "label": "Posao 9–17", "hours": "9–17", "sleep": "7–8 h", "nap": "",
-      "wakeAt": "07:00", "shiftStartAt": "09:00", "shiftEndAt": "17:00", "trainingAt": "18:00", "coffeeAt": "15:00", "napAt": "", "cookAt": "19:30", "sleepAt": "23:00",
+      "wakeAt": "07:00", "shiftStartAt": "09:00", "shiftEndAt": "17:00", "trainingAt": "18:00", "coffeeAt": "15:00", "napAt": "20:30" (samo ako ima dremku), "cookAt": "19:30", "sleepAt": "23:00",
       "dayEnd": 0,   // za noćnu smenu: sat do kog važi prethodni dan, npr. 9
       "meals": [ { "key": "dorucak", "at": "07:30", "name": "Doručak", "what": "", "protein": 25, "box": true (kutija iz kuvanja), "work": true (obrok sa posla),
                    "post": true (obrok posle treninga), "restName": "" (naziv kad nema treninga),
@@ -50,6 +50,7 @@ FORMAT PLANA (JSON objekat; svi delovi su neobavezni, izostavi ono za šta nema 
 }
 Vremena su HH:MM; posle ponoći piši 24:30, 26:00 itd. da ostanu u istom danu.
 Kodovi treninga u weekTemplate i calendar moraju postojati u program.workouts; cook mora biti ključ iz recipes.
+Polja za koja nemaš vrednost izostavi; ne piši prazne stringove ("").
 ```
 
 Napomene:
