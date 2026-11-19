@@ -134,6 +134,7 @@ details > summary::-webkit-details-marker { display: none; }
 .q-label { color: var(--ink); font-size: 1rem; font-weight: 600; }
 .q-help { font-size: 0.86rem; color: var(--muted); }
 .q-missing .q-label, .q-missing.q-check span { color: var(--red); }
+input.bad, .q-missing input:not([type=radio]):not([type=checkbox]), .q-missing textarea { border-color: var(--red) !important; }
 .req { color: var(--red); }
 .num-wrap { display: flex; align-items: center; gap: 8px; max-width: 220px; }
 .num-wrap .unit { color: var(--muted); font-weight: 600; }
@@ -305,6 +306,8 @@ input[type="search"] { border-radius: 999px; }
 .tabs .inner { max-width: 680px; margin: 0 auto; display: grid; align-items: end; gap: 4px; padding-top: 6px; }
 .tabs button { background: none; border: 1.5px solid transparent; border-radius: 14px; margin-bottom: 6px; color: var(--faint); padding: 6px 2px 7px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 600 0.78rem var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tabs button svg { width: 24px; height: 24px; }
+.tabs button > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 400px) { .tabs .inner { gap: 2px; } .tabs button { font-size: 0.7rem; letter-spacing: -0.015em; padding-left: 0; padding-right: 0; } }
 .tabs button[aria-current="page"] { color: var(--ink); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .tabs button[aria-current="page"] svg { color: var(--accent); }
 .tabs button.main { overflow: visible; color: var(--ink); font-weight: 700; padding-top: 0; }

@@ -108,6 +108,10 @@ export function validatePlan(text, opts) {
   if (p.shopping && p.shopping.items && !Array.isArray(p.shopping.items)) errors.push("shopping.items must be a list");
   ["targets", "notes", "rules", "supplements", "nutritionRules"].forEach(function (k) { if (p[k] != null && !Array.isArray(p[k])) errors.push(k + " must be a list"); });
   if (p.workplace) warnings = warnings.concat(checkWorkMenu(p, opts && opts.menus));
+  else if (p.workMenu && Object.keys(p.workMenu).length) {
+    var ids = Object.keys((opts && opts.menus) || {});
+    if (ids.length) warnings.push("Plan ima „workMenu“, ali nema „workplace“, pa obroci sa posla nisu provereni. Ako klijent radi u firmi čiji je meni učitan, dodaj u plan \"workplace\": \"" + ids[0] + "\"" + (ids.length > 1 ? " (učitani: " + ids.join(", ") + ")" : "") + " i klikni Proveri.");
+  }
 
   var parts = [];
   if (workouts.length) parts.push(t("summary_workouts", { n: workouts.length }));

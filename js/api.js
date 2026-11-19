@@ -147,6 +147,10 @@ function supaApi(cfg) {
     async listAllDaily(since) {
       return fetchAll(function () { return sb.from("daily_logs").select("client_id,day,data").gte("day", since).order("day").order("client_id"); });
     },
+    // Nedeljni izbori svih klijenata (za brojanje planiranih treninga u napretku).
+    async listAllWeeks(since) {
+      return fetchAll(function () { return sb.from("week_plans").select("client_id,week,days").gte("week", since).order("week").order("client_id"); });
+    },
     async listAllSessions(since) {
       return fetchAll(function () { return sb.from("sessions").select("client_id,day,workout,data").gte("day", since).order("day").order("client_id").order("workout"); });
     },
@@ -316,6 +320,11 @@ function demoApi() {
     async listAllDaily(since) {
       var s = load(), out = []; guardAdmin(s);
       Object.keys(s.daily).forEach(function (cid) { Object.keys(s.daily[cid]).forEach(function (d) { if (d >= since) out.push({ client_id: cid, day: d, data: clone(s.daily[cid][d]) }); }); });
+      return out;
+    },
+    async listAllWeeks(since) {
+      var s = load(), out = []; guardAdmin(s);
+      Object.keys(s.weeks || {}).forEach(function (cid) { Object.keys(s.weeks[cid]).forEach(function (w) { if (w >= since) out.push({ client_id: cid, week: w, days: clone(s.weeks[cid][w]) }); }); });
       return out;
     },
     async listAllSessions(since) {

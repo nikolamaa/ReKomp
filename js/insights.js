@@ -22,8 +22,10 @@ function planEntry(plan, day) {
   if (!cal && !wt) return null;
   return Object.assign({}, wt || {}, cal || {});
 }
-function plannedWorkout(plan, day) {
-  var e = planEntry(plan, day);
+// picks: izbor klijenta u „Moja nedelja" { ponedeljak: { datum: { work, rhythm, workout } } } ima prednost nad planom.
+function plannedWorkout(plan, day, picks) {
+  var wk = picks && picks[monday(day)], o = wk && wk[day];
+  var e = o ? { workout: o.workout || null } : planEntry(plan, day);
   if (!e || !e.workout) return null;
   var ws = (plan.program && plan.program.workouts) || [];
   return ws.some(function (w) { return w.code === e.workout; }) ? e.workout : null;
@@ -49,7 +51,7 @@ function median(arr) {
 }
 
 /*
-  input: { clients: [...], plans: {cid: {data, published}}, goals: {cid: goal_main}, daily: [{client_id, day, data}], sessions: [{client_id, day, workout, data}] }
+  input: { clients: [...], plans: {cid: {data, published}}, goals: {cid: goal_main}, daily: [{client_id, day, data}], sessions: [{client_id, day, workout, data}], weeks: [{client_id, week, days}] }
   opts:  { weeks: 4 | 8 | 12, now: "YYYY-MM-DD" }
   return: { weeks: [mondays], rows: [{ client, goal, status, reasons, weight, waist, strength, adherence, checkins, easy, lastDay, series }] }
 */
@@ -61,7 +63,8 @@ export function computeInsights(input, opts) {
   var from = firstMon, yesterday = addDays(now, -1);
 
   var byClient = {};
-  (input.clients || []).forEach(function (c) { byClient[c.id] = { daily: {}, sessions: [] }; });
+  (input.clients || []).forEach(function (c) { byClient[c.id] = { daily: {}, sessions: [], weeks: {}, pick: !!(c.sections && c.sections.weekpick) }; });
+  (input.weeks || []).forEach(function (r) { var b = byClient[r.client_id]; if (b && b.pick) b.weeks[r.week] = r.days || {}; });
   (input.daily || []).forEach(function (r) { if (byClient[r.client_id]) byClient[r.client_id].daily[r.day] = r.data || {}; });
   (input.sessions || []).forEach(function (r) { if (byClient[r.client_id]) byClient[r.client_id].sessions.push(r); });
 
@@ -117,7 +120,7 @@ export function computeInsights(input, opts) {
     B.sessions.forEach(function (s) { if (sessionHasEntries(s) && s.day >= planStart && s.day <= now) { var k = monday(s.day); weekSess[k] = (weekSess[k] || 0) + 1; } });
     for (var d = planStart; d <= yesterday; d = addDays(d, 1)) {
       if ((B.daily[d] || {}).easy) easy++;
-      if (!plannedWorkout(plan, d)) continue;
+      if (!plannedWorkout(plan, d, B.weeks)) continue;
       var wk = monday(d); planned++; weekPlan[wk] = (weekPlan[wk] || 0) + 1;
     }
     Object.keys(weekPlan).forEach(function (wk) { weekDone[wk] = Math.min(weekSess[wk] || 0, weekPlan[wk]); done += weekDone[wk]; });

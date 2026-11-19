@@ -1,5 +1,5 @@
 // Service worker: aplikacija se otvara i bez interneta; izmene stižu čim ima veze.
-var VERSION = "rekomp-v23";
+var VERSION = "rekomp-v24";
 var SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./manifest.webmanifest", "./vendor/supabase.js",
   "./js/app.js", "./js/api.js", "./js/util.js", "./js/i18n.js", "./js/intake.js", "./js/intake-ui.js",

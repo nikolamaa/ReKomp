@@ -25,7 +25,7 @@ window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault()
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("./sw.js").catch(function () { /* ignore */ });
 }
-window.addEventListener("offline", function () { toast(t("offline")); });
+window.addEventListener("offline", function () { toast(t(state.me && state.me.isAdmin && !state.ownPlan && !state.preview ? "offline_admin" : "offline")); });
 
 function appUrl() { return CFG.appUrl || (location.origin + location.pathname.replace(/index\.html$/, "")); }
 

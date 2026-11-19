@@ -112,9 +112,10 @@ export function mountIntake(root, opts) {
     var back = document.getElementById("iqBack");
     if (back) back.addEventListener("click", function () { save.flush(); step = editingFromReview ? SECTIONS.length : step - 1; render(); window.scrollTo(0, 0); });
     document.getElementById("iqNext").addEventListener("click", function () {
-      var miss = missingRequired(s, answers);
+      var miss = missingRequired(s, answers), msg = "required_missing";
+      if (!miss.length) { miss = badNumbers(s, answers); msg = "num_invalid"; }
       if (miss.length) {
-        var e = document.getElementById("iqErr"); e.textContent = t("required_missing"); e.hidden = false;
+        var e = document.getElementById("iqErr"); e.textContent = t(msg); e.hidden = false;
         var first = form.querySelector('[data-field="' + miss[0].id + '"]'); if (first) first.scrollIntoView({ block: "center" });
         miss.forEach(function (m) { var el = form.querySelector('[data-field="' + m.id + '"]'); if (el) el.classList.add("q-missing"); });
         return;
@@ -128,11 +129,22 @@ export function mountIntake(root, opts) {
     if (skip) skip.addEventListener("click", function () { progress[s.id] = "skipped"; save(); save.flush(); step += 1; render(); window.scrollTo(0, 0); });
   }
 
+  // Brojevi: mora biti broj, u razumnom opsegu ako je zadat (npr. visina 120–230 cm).
+  function badNumbers(s, a) {
+    return s.fields.filter(function (f) {
+      if (f.type !== "number" || !fieldVisible(f, a)) return false;
+      var v = a[f.id];
+      if (v == null || v === "") return false;
+      if (typeof v !== "number") return true;
+      return (f.min != null && v < f.min) || (f.max != null && v > f.max);
+    });
+  }
+
   function applyVisibility(s) {
     s.fields.forEach(function (f) {
       var el = root.querySelector('[data-field="' + f.id + '"]');
       if (el) el.hidden = !fieldVisible(f, answers);
-      if (el && el.classList.contains("q-missing") && missingRequired({ fields: [f] }, answers).length === 0) el.classList.remove("q-missing");
+      if (el && el.classList.contains("q-missing") && missingRequired({ fields: [f] }, answers).length === 0 && badNumbers({ fields: [f] }, answers).length === 0) el.classList.remove("q-missing");
     });
   }
 

@@ -248,7 +248,7 @@ export var SECTIONS = [
         O("gym", "Komercijalna teretana", "Commercial gym", "Тренажёрный зал"), O("home_gym", "Kućna teretana", "Home gym", "Домашний зал"),
         O("home", "Kod kuće, bez opreme", "At home, no equipment", "Дома, без оборудования"), O("outdoor", "Napolju", "Outdoors", "На улице"), O("mix", "Kombinacija", "A mix", "Комбинация")] },
       { id: "gym_name", type: "text", showIf: { f: "location", in: ["gym", "mix"] }, label: L("Koja teretana?", "Which gym?", "Какой зал?") },
-      { id: "equipment", type: "multi", showIf: { f: "location", in: ["home_gym", "home", "outdoor", "mix"] }, label: L("Oprema koju imaš", "Equipment you have", "Какое оборудование есть"), options: [
+      { id: "equipment", type: "multi", exclusive: "nothing", showIf: { f: "location", in: ["home_gym", "home", "outdoor", "mix"] }, label: L("Oprema koju imaš", "Equipment you have", "Какое оборудование есть"), options: [
         O("dumbbells", "Bučice", "Dumbbells", "Гантели"), O("barbell", "Šipka i tegovi", "Barbell and plates", "Штанга и блины"), O("bench", "Klupa", "Bench", "Скамья"),
         O("rack", "Stalak za čučanj", "Squat rack", "Стойка для приседаний"), O("pullup", "Šipka za zgibove", "Pull-up bar", "Турник"), O("bands", "Elastične trake", "Resistance bands", "Резинки"),
         O("kettlebell", "Girja", "Kettlebell", "Гиря"), O("cardio", "Traka ili sobni bicikl", "Treadmill or exercise bike", "Беговая дорожка или велотренажёр"), O("nothing", "Ništa", "Nothing", "Ничего")] },
@@ -256,7 +256,7 @@ export var SECTIONS = [
         O("all", "Svaki trening sa trenerom", "Every session with the trainer", "Каждая тренировка с тренером"),
         O("some", "Neki treninzi sa trenerom, ostali sam/a", "Some sessions with the trainer, the rest alone", "Часть тренировок с тренером, остальные сам(а)"),
         O("online", "Samo plan i praćenje online", "Plan and online check-ins only", "Только план и онлайн-сопровождение")] },
-      { id: "cardio_pref", type: "multi", label: L("Kardio koji ti odgovara", "Cardio you're happy to do", "Какое кардио подходит"), options: [
+      { id: "cardio_pref", type: "multi", exclusive: "none", label: L("Kardio koji ti odgovara", "Cardio you're happy to do", "Какое кардио подходит"), options: [
         O("walk", "Hod na traci", "Treadmill walking", "Ходьба на дорожке"), O("bike", "Bicikl", "Bike", "Велосипед"), O("elliptical", "Eliptični trenažer", "Elliptical", "Эллипс"),
         O("rower", "Veslanje", "Rowing machine", "Гребной тренажёр"), O("run", "Trčanje napolju", "Running outside", "Бег на улице"), O("swim", "Plivanje", "Swimming", "Плавание"),
         O("none", "Ne volim kardio", "I don't like cardio", "Не люблю кардио")] },
@@ -431,6 +431,10 @@ function isEmpty(v) {
 export function fieldVisible(field, answers) {
   var c = field.showIf;
   if (!c) return true;
+  // Lančani uslov: ako je sakriveno pitanje od kog ovo zavisi, sakriveno je i ovo
+  // (npr. napomena o ciklusu kad pol više nije „ženski“).
+  var parent = FIELD_INDEX[c.f];
+  if (parent && parent !== field && parent.showIf && !fieldVisible(parent, answers)) return false;
   var v = answers[c.f];
   if (c.eq != null) return v === c.eq;
   if (c.in) return c.in.indexOf(v) >= 0;

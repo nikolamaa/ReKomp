@@ -1,6 +1,6 @@
 // Klijentska strana: Danas, Trening, Ishrana, Kalendar, Napredak, Plan, Profil.
 // Sekcija se prikazuje samo ako je uključena i plan za nju ima sadržaj.
-import { $, qsa, esc, ymd, parseYmd, addDays, monday, weekdayKey, num, f1, fnum, hm, fmtMin, nowHM, lsGet, lsSet, lsDel, isStandalone, isIOS, toast } from "./util.js";
+import { $, qsa, esc, ymd, parseYmd, addDays, monday, weekdayKey, num, badNum, f1, fnum, hm, fmtMin, nowHM, lsGet, lsSet, lsDel, isStandalone, isIOS, toast } from "./util.js";
 import { t, getLang, fmtShortDate, fmtLongDate, fmtRange, dayLong, langSelectHtml } from "./i18n.js";
 
 var COLORS = ["blue", "red", "green", "amber", "violet"];
@@ -226,15 +226,29 @@ export function mountClient(root, ctx) {
   if ($("cExitPreview")) $("cExitPreview").addEventListener("click", function () { if (ctx.onExitPreview) ctx.onExitPreview(); });
 
   /* ---------- writes ---------- */
-  var dailyQ = Promise.resolve();
+  // Dnevni unosi: bez interneta se čuvaju na telefonu i šalju čim se veza vrati.
+  // Obećanje se ne odbija: vraća { queued: true } kad je unos ostao na telefonu.
+  var dailyQ = Promise.resolve(), PKEY = "rekomp-pending-" + ctx.clientId;
+  function pendingGet() { return lsGet(PKEY) || {}; }
+  function pendingSet(date, data) { var p = pendingGet(); if (data) p[date] = data; else delete p[date]; if (Object.keys(p).length) lsSet(PKEY, p); else lsDel(PKEY); }
   function writeDaily(date, patch) {
     var body = Object.assign({}, S.daily[date] || {}, patch, { date: date });
     S.daily[date] = body;
-    if (ctx.readonly) return Promise.resolve();
+    if (ctx.readonly) return Promise.resolve({});
     var data = Object.assign({}, body); delete data.date;
-    var run = dailyQ.catch(function () {}).then(function () { return ctx.api.saveDaily(ctx.clientId, date, data); });
+    var run = dailyQ.then(function () { return ctx.api.saveDaily(ctx.clientId, date, data); })
+      .then(function () { pendingSet(date, null); return {}; }, function () { pendingSet(date, data); return { queued: true }; });
     dailyQ = run; return run;
   }
+  function flushPending() {
+    if (ctx.readonly) return Promise.resolve();
+    var p = pendingGet();
+    return Promise.all(Object.keys(p).map(function (d) {
+      return ctx.api.saveDaily(ctx.clientId, d, p[d]).then(function () { if (JSON.stringify(pendingGet()[d]) === JSON.stringify(p[d])) pendingSet(d, null); }, function () {});
+    }));
+  }
+  function onOnline() { flushPending(); if (S.trDirty || saveTimer) flushSession(false); }
+  window.addEventListener("online", onOnline);
 
   /* ---------- Danas ---------- */
   function buildTimeline(day) {
@@ -255,9 +269,10 @@ export function mountClient(root, ctx) {
       if (tr.movedIn) sub = t("easy_moved_in") + ". " + sub;
       if (at != null) items.push({ at: at, o: 1, kind: "train", color: w._color, code: tr.code, title: ttl, sub: sub });
     }
-    if (e.cook && hm(r.cookAt) != null && on("nutrition")) {
+    var cookAt = hm(e.cookAt || r.cookAt);
+    if (e.cook && cookAt != null && on("nutrition")) {
       var rc = REC[e.cook];
-      items.push({ at: hm(r.cookAt), o: 3, kind: "cook", title: t("cooking", { x: rc ? rc.name : e.cook }), sub: (rc && rc.time ? rc.time + " " : "") + t("cooking_sub") });
+      items.push({ at: cookAt, o: 3, kind: "cook", title: t("cooking", { x: rc ? rc.name : e.cook }), sub: (rc && rc.time ? rc.time + " " : "") + t("cooking_sub") });
     }
     if (work && hm(r.shiftStartAt) != null) items.push({ at: hm(r.shiftStartAt), o: 1, kind: "shift", title: t("shift_start"), sub: [r.hours, t("stand_up")].filter(Boolean).join(". ") });
     if (work && hm(r.shiftEndAt) != null) items.push({ at: hm(r.shiftEndAt), o: 1, kind: "shift", title: t("shift_end"), sub: (trainAt(day) != null && r.endTipTrain) || r.endTip || "" });
@@ -301,7 +316,7 @@ export function mountClient(root, ctx) {
     if (CI.sleep && slp != null && tr && !tr.away && !tr.easy) h += slp < 5 ? '<div class="hint bad">' + esc(t("sleep_bad")) + "</div>" : (slp < 6.5 ? '<div class="hint warn">' + esc(t("sleep_warn", { x: f1(slp) })) + "</div>" : '<div class="hint ok">' + esc(t("sleep_ok", { x: f1(slp) })) + "</div>");
     if (CI.pain && num(d.pain) != null && num(d.pain) > 3) h += '<div class="hint bad">' + esc(t("pain_bad", { x: d.pain })) + "</div>";
     var td = addDays(day, 1), te = dayEntry(td), tt = trainOf(td);
-    if (te || tt) h += '<div class="tomorrow"><b>' + esc(t("tomorrow")) + ":</b> " + esc(shiftLabel(td)) + (tt && !tt.away ? ", " + esc(wTitle(tt.code)) + (tt.time ? " " + esc(tt.time) : "") + (tt.movedIn ? " (" + esc(t("easy_moved_in")) + ")" : "") : ", " + esc(t("no_training"))) + (te && te.note ? ". " + esc(te.note) : "") + "</div>";
+    if (te || tt) h += '<div class="tomorrow"><b>' + esc(t("tomorrow")) + ":</b> " + esc(shiftLabel(td)) + (tt && !tt.away ? ", " + esc(wTitle(tt.code)) + (tt.time ? " " + esc(tt.time) : "") + (tt.movedIn ? " (" + esc(t("easy_moved_from_today")) + ")" : "") : ", " + esc(t("no_training"))) + (te && te.note ? ". " + esc(te.note) : "") + "</div>";
     $("hero").innerHTML = h;
 
     // raspored
@@ -337,7 +352,7 @@ export function mountClient(root, ctx) {
     var eb = e.target.closest && e.target.closest("[data-easy]");
     if (eb && !ctx.readonly) {
       var eday = eb.dataset.day, ev = eb.dataset.easy || null;
-      writeDaily(eday, { easy: ev }).then(function () { toast(t(ev ? "easy_saved" : "easy_removed")); }, function () { toast(t("not_saved")); });
+      writeDaily(eday, { easy: ev }).then(function (r) { toast(r.queued ? t("saved_offline") : t(ev ? "easy_saved" : "easy_removed")); });
       renderDanas(); if (S.trCode) renderTrForm(true);
       return;
     }
@@ -347,7 +362,7 @@ export function mountClient(root, ctx) {
   function onMealToggle(e) {
     var k = e.target && e.target.dataset ? e.target.dataset.meal : null; if (!k) return;
     var day = activeDay(), meals = Object.assign({}, (S.daily[day] && S.daily[day].meals) || {}); meals[k] = !!e.target.checked;
-    writeDaily(day, { meals: meals }).then(function () { $("tlStatus").textContent = ""; }, function () { $("tlStatus").textContent = t("not_saved"); });
+    writeDaily(day, { meals: meals }).then(function (r) { $("tlStatus").textContent = r.queued ? t("saved_offline") : ""; });
     renderDanas();
   }
   $("timeline").addEventListener("change", onMealToggle);
@@ -392,17 +407,24 @@ export function mountClient(root, ctx) {
     if ($("pain")) $("pain").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; var v = Number(b.dataset.p); setPain(S.ciPain === v ? null : v); S.ciDirty = true; });
     $("ciEdit").addEventListener("click", function () { S.ciEdit = true; fillCheckin(ciDate()); renderCheckin(); var w = $("dWeight") || $("dSleep"); if (w) w.focus(); });
     $("dDate").addEventListener("change", function () { $("dDate").dataset.auto = "0"; S.ciEdit = true; fillCheckin(ciDate()); renderCheckin(); $("dStatus").textContent = ""; });
-    ["dWeight", "dSleep", "dWaist", "dNote"].forEach(function (id) { if ($(id)) $(id).addEventListener("input", function () { S.ciDirty = true; }); });
+    ["dWeight", "dSleep", "dWaist", "dNote"].forEach(function (id) { if ($(id)) $(id).addEventListener("input", function () { S.ciDirty = true; $(id).classList.remove("bad"); }); });
     $("ciForm").addEventListener("submit", async function (e) {
       e.preventDefault();
       if (ctx.readonly) return;
+      // Tekst koji nije broj ne sme tiho da obriše vrednost.
+      var bad = [["dWeight", "weight_kg", 20, 400], ["dSleep", "sleep_h", 0, 24], ["dWaist", "waist_cm", 30, 250]].filter(function (f) {
+        var el = $(f[0]); if (!el) return false;
+        var n = num(el.value), wrong = badNum(el.value) || (n != null && (n < f[2] || n > f[3]));
+        el.classList.toggle("bad", wrong); return wrong;
+      });
+      if (bad.length) { $("dStatus").textContent = t("ci_bad_number", { x: t(bad[0][1]) }); $(bad[0][0]).focus(); return; }
       var date = ciDate(), patch = { note: $("dNote").value.trim() };
       if ($("dWeight")) patch.weight = num($("dWeight").value);
       if ($("dSleep")) patch.sleep = num($("dSleep").value);
       if (CI.pain) patch.pain = S.ciPain;
       if ($("dWaist")) patch.waist = num($("dWaist").value);
       $("dSave").disabled = true; $("dStatus").textContent = t("saving");
-      try { await writeDaily(date, patch); S.ciDirty = false; S.ciEdit = false; $("dStatus").textContent = t("saved_at", { time: nowHM() }); $("dDate").value = activeDay(); $("dDate").dataset.auto = "1"; renderDanas(); renderProgress(); }
+      try { var res = await writeDaily(date, patch); S.ciDirty = false; S.ciEdit = false; $("dStatus").textContent = res.queued ? t("saved_offline") : t("saved_at", { time: nowHM() }); $("dDate").value = activeDay(); $("dDate").dataset.auto = "1"; renderDanas(); renderProgress(); }
       catch (err) { $("dStatus").textContent = t("not_saved"); }
       $("dSave").disabled = false;
     });
@@ -479,7 +501,7 @@ export function mountClient(root, ctx) {
       '<div id="trList" class="view"></div>' +
       '<div class="card"><div class="field"><label for="trNote">' + esc(t("workout_note")) + '</label><textarea id="trNote" placeholder="' + esc(t("workout_note_ph")) + '"></textarea></div>' +
       '<div class="actions"><button class="btn" type="button" id="trSave"' + (ctx.readonly ? " disabled" : "") + ">" + esc(t("save_workout")) + '</button><span id="trStatus" class="status" role="status"></span></div></div>';
-    $("trList").addEventListener("input", function (e) { if (e.target.matches("input[data-ex]")) onTrInput(); });
+    $("trList").addEventListener("input", function (e) { if (e.target.matches("input[data-ex]")) { e.target.classList.toggle("bad", badNum(e.target.value)); onTrInput(); } });
     $("trList").addEventListener("click", function (e) {
       var b = e.target.closest("[data-copy]"); if (!b) return;
       var i = Number(b.dataset.copy), ex = WK[S.trCode].exercises[i], last = lastSession(ex.name), prev = last ? setsOf(last, ex.name) || [] : [];
@@ -530,6 +552,7 @@ export function mountClient(root, ctx) {
   }
   async function selectWorkout(code, date) {
     if (saveTimer) await flushSession(false);
+    S.trAuto = false;
     S.trCode = code; S.trDate = date || S.trDate || activeDay();
     if ($("trDate")) $("trDate").value = S.trDate;
     renderTrForm(true);
@@ -679,7 +702,7 @@ export function mountClient(root, ctx) {
     // nova nedelja koja bi počela treningom odmah posle nedeljnog treninga: odmah predloži bolji raspored
     var pe = dayEntry(addDays(m, -1));
     if (!S.weeks[m] && rows[m].train && pe && pe.workout && WK[pe.workout]) wpSuggest();
-    renderWeek(); go("week");
+    renderWp(); go("week");
   }
   function combos(arr, k) {
     var out = [];
@@ -745,7 +768,7 @@ export function mountClient(root, ctx) {
       '<div class="actions"><button type="button" class="btn" data-wp="' + m + '">' + esc(t("wp_set")) + "</button></div>";
     el.hidden = false;
   }
-  function renderWeek() {
+  function renderWp() {
     var v = $("v-week"); if (!S.wp) { v.innerHTML = ""; return; }
     var m = S.wp.m, list = weekDays(m), asg = wpAssign(), seq = weekSeq(m), n = Object.keys(asg).length, td = ymd(new Date());
     var opts = [["", t("wp_free")]].concat(RH_KEYS.length > 1 ? RH_KEYS.map(function (k) { return [k, RH[k].label || k]; }) : [["work", t("wp_work")]]);
@@ -778,22 +801,22 @@ export function mountClient(root, ctx) {
     var d = e.target && e.target.dataset ? e.target.dataset.wpShift : null; if (!d || !S.wp) return;
     S.wp.rows[d].v = e.target.value; S.wp.saved = "";
     if (!S.wp.manual) wpSuggest();   // promena slobodnih dana sama pomera treninge, dok ih klijent ne podesi ručno
-    renderWeek();
+    renderWp();
   });
   root.addEventListener("click", async function (e) {
     var el = e.target.closest && e.target.closest("[data-wp],[data-wp-train],#wpBack,#wpSave,#wpSame,#wpReset,#wpSuggest");
     if (!el) return;
     if (el.dataset.wp) { openWeek(el.dataset.wp); return; }
     if (!S.wp) return;
-    if (el.dataset.wpTrain) { var r = S.wp.rows[el.dataset.wpTrain]; r.train = !r.train; S.wp.manual = true; S.wp.suggested = false; S.wp.saved = ""; renderWeek(); return; }
-    if (el.id === "wpSuggest") { S.wp.manual = false; wpSuggest(); S.wp.saved = ""; renderWeek(); return; }
+    if (el.dataset.wpTrain) { var r = S.wp.rows[el.dataset.wpTrain]; r.train = !r.train; S.wp.manual = true; S.wp.suggested = false; S.wp.saved = ""; renderWp(); return; }
+    if (el.id === "wpSuggest") { S.wp.manual = false; wpSuggest(); S.wp.saved = ""; renderWp(); return; }
     if (el.id === "wpBack") { var f = S.wp.from; S.wp = null; go(f); return; }
-    if (el.id === "wpSame") { var pm = addDays(S.wp.m, -7); weekDays(S.wp.m).forEach(function (d, i) { S.wp.rows[d] = rowOf(dayEntry(addDays(pm, i))); }); S.wp.manual = false; S.wp.suggested = false; S.wp.saved = ""; renderWeek(); return; }
-    if (el.id === "wpReset") { weekDays(S.wp.m).forEach(function (d) { S.wp.rows[d] = rowOf(baseEntry(d)); }); S.wp.manual = false; S.wp.suggested = false; S.wp.saved = ""; renderWeek(); return; }
+    if (el.id === "wpSame") { var pm = addDays(S.wp.m, -7); weekDays(S.wp.m).forEach(function (d, i) { S.wp.rows[d] = rowOf(dayEntry(addDays(pm, i))); }); S.wp.manual = false; S.wp.suggested = false; S.wp.saved = ""; renderWp(); return; }
+    if (el.id === "wpReset") { weekDays(S.wp.m).forEach(function (d) { S.wp.rows[d] = rowOf(baseEntry(d)); }); S.wp.manual = false; S.wp.suggested = false; S.wp.saved = ""; renderWp(); return; }
     if (el.id === "wpSave" && !ctx.readonly) {
       var days = wpDays(), m = S.wp.m;
       $("wpSt").textContent = t("saving"); el.disabled = true;
-      try { await ctx.api.saveWeek(ctx.clientId, m, days); S.weeks[m] = days; S.wp.saved = t("wp_saved"); renderAll(); renderWeek(); }
+      try { await ctx.api.saveWeek(ctx.clientId, m, days); S.weeks[m] = days; S.wp.saved = t("wp_saved"); renderAll(); renderWp(); }
       catch (err) { $("wpSt").textContent = t("not_saved"); el.disabled = false; }
     }
   });
@@ -920,8 +943,10 @@ export function mountClient(root, ctx) {
 
   /* ---------- start ---------- */
   function renderAll() {
-    renderDanas(); renderWeekCard(); renderCal(); renderProgress(); renderPlan();
-    if (S.trCode == null && WORKOUTS.length) { S.trCode = defaultWorkout(); S.trDate = activeDay(); if ($("trDate")) $("trDate").value = S.trDate; renderTrForm(true); }
+    renderDanas(); renderWeekCard(); renderWeek(); renderCal(); renderProgress(); renderPlan();
+    // Dok klijent sam ne izabere trening ili datum, prati današnji dan (npr. kad stigne izbor nedelje ili prođe ponoć).
+    var autoStale = S.trAuto && !S.trDirty && !saveTimer && (S.trDate !== activeDay() || S.trCode !== defaultWorkout());
+    if ((S.trCode == null || autoStale) && WORKOUTS.length) { S.trCode = defaultWorkout(); S.trDate = activeDay(); S.trAuto = true; if ($("trDate")) $("trDate").value = S.trDate; renderTrForm(true); }
     else renderTrForm(false);
   }
   buildTraining(); buildNutrition();
@@ -929,8 +954,10 @@ export function mountClient(root, ctx) {
   renderAll();
   async function loadData() {
     try {
+      await flushPending();
       var d = await ctx.api.listDaily(ctx.clientId), s = await ctx.api.listSessions(ctx.clientId);
       var dm = {}; (d || []).forEach(function (r) { dm[r.day] = Object.assign({}, r.data, { date: r.day }); });
+      var pend = pendingGet(); Object.keys(pend).forEach(function (k) { dm[k] = Object.assign({}, pend[k], { date: k }); });   // još neposlato ima prednost
       var sm = {}; (s || []).forEach(function (r) { sm[r.day + "_" + r.workout] = Object.assign({}, r.data, { date: r.day, workout: r.workout }); });
       Object.keys(S.daily).forEach(function (k) { if (!dm[k]) dm[k] = S.daily[k]; });
       S.daily = dm; S.sessions = sm; S.loaded = true;
@@ -952,7 +979,7 @@ export function mountClient(root, ctx) {
   window.addEventListener("pagehide", onVis);
 
   return {
-    destroy: function () { clearInterval(S.timer); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", onVis); if (saveTimer) flushSession(false); },
+    destroy: function () { clearInterval(S.timer); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", onVis); window.removeEventListener("online", onOnline); if (saveTimer) flushSession(false); },
     reloadData: loadData,
     view: function () { return S.view; }
   };

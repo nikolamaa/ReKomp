@@ -19,11 +19,15 @@ export function monday(s) { var d = parseYmd(s); d.setDate(d.getDate() - (d.getD
 export var WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 export function weekdayKey(s) { return WEEKDAY_KEYS[parseYmd(s).getDay()]; }
 
+// Broj iz unosa: prihvata zarez ili tačku i jedinicu na kraju ("72,4 kg", "7h", "16kg").
 export function num(v) {
   if (v === "" || v == null) return null;
-  var n = Number(String(v).trim().replace(",", "."));
-  return isFinite(n) ? n : null;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  var m = String(v).trim().match(/^(-?\d+(?:[.,]\d+)?)\s*(?:[a-zA-Zа-яА-Я%]{1,4}\.?)?$/);
+  return m ? Number(m[1].replace(",", ".")) : null;
 }
+// Polje ima tekst koji nije broj (prazno je u redu).
+export function badNum(v) { return String(v == null ? "" : v).trim() !== "" && num(v) == null; }
 export function f1(n, dec) {
   if (n == null) return "—";
   var s = Number(n).toFixed(dec == null ? 1 : dec);

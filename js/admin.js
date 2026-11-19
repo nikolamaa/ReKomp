@@ -132,15 +132,16 @@ export function mountAdmin(root, ctx) {
   async function loadInsightData(force) {
     if (S.ins && !force && Date.now() - S.ins.at < 60000) return S.ins;
     var since = addDays(monday(today()), -7 * 12);
-    var res = await Promise.all([ctx.api.listPlans(), ctx.api.listAllDaily(since), ctx.api.listAllSessions(since)]);
+    var res = await Promise.all([ctx.api.listPlans(), ctx.api.listAllDaily(since), ctx.api.listAllSessions(since),
+      ctx.api.listAllWeeks(since).catch(function () { return []; })]);   // week_plans možda još ne postoji
     var plans = {}; (res[0] || []).forEach(function (p) { plans[p.client_id] = p; });
     var goals = {}; S.clients.forEach(function (c) { if (c.intake && c.intake.answers) goals[c.id] = c.intake.answers.goal_main || null; });
     var colors = {}; S.clients.filter(function (c) { return c.status === "active"; }).sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (c, i) { colors[c.id] = PALETTE[i % PALETTE.length]; });
-    S.ins = { at: Date.now(), plans: plans, goals: goals, daily: res[1] || [], sessions: res[2] || [], colors: colors };
+    S.ins = { at: Date.now(), plans: plans, goals: goals, daily: res[1] || [], sessions: res[2] || [], weeks: res[3] || [], colors: colors };
     return S.ins;
   }
   function insights(weeks) {
-    return computeInsights({ clients: S.clients, plans: S.ins.plans, goals: S.ins.goals, daily: S.ins.daily, sessions: S.ins.sessions }, { weeks: weeks });
+    return computeInsights({ clients: S.clients, plans: S.ins.plans, goals: S.ins.goals, daily: S.ins.daily, sessions: S.ins.sessions, weeks: S.ins.weeks }, { weeks: weeks });
   }
   function reasonText(r) {
     var v = Object.assign({}, r.vars);
@@ -245,11 +246,17 @@ export function mountAdmin(root, ctx) {
     var svg = '<svg viewBox="0 0 ' + W + " " + H + '" class="pr-svg" role="img" aria-label="' + esc(t("pr_m_" + key)) + '">';
     for (var g = 0; g <= 4; g++) {
       var gv = lo + (hi - lo) * g / 4, gy = Y(gv);
-      svg += '<line x1="' + L + '" x2="' + (W - Rm) + '" y1="' + gy + '" y2="' + gy + '" class="grid"/><text x="' + (L - 6) + '" y="' + (gy + 4) + '" class="ax" text-anchor="end">' + esc(f1(gv, Math.abs(hi - lo) < 6 ? 1 : 0)) + "</text>";
+      svg += '<line x1="' + L + '" x2="' + (W - Rm) + '" y1="' + gy + '" y2="' + gy + '" class="grid"/><text x="' + (L - 6) + '" y="' + (gy + 4) + '" class="ax" text-anchor="end">' + esc(f1(gv, Math.abs(hi - lo) < 6 ? 1 : 0).replace(/^-(0([.,]0+)?)$/, "$1")) + "</text>";
     }
     if (lo < 0 && hi > 0) svg += '<line x1="' + L + '" x2="' + (W - Rm) + '" y1="' + Y(0) + '" y2="' + Y(0) + '" class="zero"/>';
     var step = Math.ceil(weeks.length / 6);
-    weeks.forEach(function (wk, i) { if (i % step === 0 || i === weeks.length - 1) { var d = parseYmd(wk); svg += '<text x="' + X(i) + '" y="' + (H - 8) + '" class="ax" text-anchor="middle">' + d.getDate() + "." + (d.getMonth() + 1) + ".</text>"; } });
+    // Oznake nedelja: poslednja uvek, a prethodna se preskače ako bi se preklopila sa njom.
+    weeks.forEach(function (wk, i) {
+      var last = i === weeks.length - 1;
+      if (!(i % step === 0 || last) || (!last && weeks.length - 1 - i < step)) return;
+      var d = parseYmd(wk), anchor = i === 0 ? "start" : last ? "end" : "middle";
+      svg += '<text x="' + X(i) + '" y="' + (H - 8) + '" class="ax" text-anchor="' + anchor + '">' + d.getDate() + "." + (d.getMonth() + 1) + ".</text>";
+    });
     shown.forEach(function (l) {
       var seg = [], segs = [];
       l.v.forEach(function (v, i) { if (v == null) { if (seg.length) segs.push(seg); seg = []; } else seg.push(X(i).toFixed(1) + "," + Y(v).toFixed(1)); });
@@ -361,7 +368,7 @@ export function mountAdmin(root, ctx) {
       '<div class="actions"><label class="btn small" for="pFile">' + esc(t("load_file")) + '</label><input type="file" id="pFile" accept=".txt,.json,text/plain,application/json" hidden><span class="small muted">' + esc(t("load_file_hint")) + "</span></div>" +
       '<div class="field"><label for="pJson">' + esc(t("plan_json")) + '</label><textarea id="pJson" class="code" rows="14" spellcheck="false" placeholder="{ … }">' + esc(text) + '</textarea><p class="q-help">' + esc(t("plan_json_hint")) + "</p></div>" +
       '<div id="pCheck" role="status"></div>' +
-      '<div class="actions"><button type="button" class="btn ghost small" id="pVal">' + esc(t("validate")) + '</button><button type="button" class="btn ghost small" id="pDraft">' + esc(t("save_draft")) + "</button>" +
+      '<div class="actions"><button type="button" class="btn ghost small" id="pVal">' + esc(t("validate")) + '</button><button type="button" class="btn ghost small" id="pDraft">' + esc(pub ? t("save_changes") : t("save_draft")) + "</button>" +
       '<button type="button" class="btn small" id="pPub">' + esc(pub ? t("unpublish") : t("publish")) + '</button><button type="button" class="btn ghost small" id="pPrev">' + esc(t("preview")) + '</button><button type="button" class="btn ghost small" id="pCopy">' + esc(t("copy")) + "</button></div></div>" +
       '<div class="card"><h3>' + esc(t("messages")) + '</h3><div id="pNotes" class="notes"></div><div class="field"><label for="pMsg">' + esc(t("add_message")) + '</label><textarea id="pMsg" rows="2"></textarea></div><div class="actions"><button type="button" class="btn small" id="pAddMsg">' + esc(t("add")) + "</button></div></div>";
     function drawNotes() {
@@ -482,7 +489,14 @@ export function mountAdmin(root, ctx) {
       });
     }
     $("acCode").addEventListener("click", async function () { try { D.client = await ctx.api.newInviteCode(D.id); tabAccess(el, D); } catch (e) { toast(t("error_generic")); } });
-    qsa("[data-unlink]", el).forEach(function (b) { b.addEventListener("click", async function () { await ctx.api.removeMember(b.dataset.unlink); D.members = await ctx.api.listMembers(D.id); tabAccess(el, D); }); });
+    // Uklanjanje pristupa: drugi klik u roku od 5 s potvrđuje (klijent posle treba nov kod).
+    qsa("[data-unlink]", el).forEach(function (b) {
+      b.addEventListener("click", async function () {
+        if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = t("unlink_confirm"); b.classList.add("danger-btn"); setTimeout(function () { if (b.isConnected) { delete b.dataset.armed; b.textContent = t("unlink"); b.classList.remove("danger-btn"); } }, 5000); return; }
+        b.disabled = true;
+        try { await ctx.api.removeMember(b.dataset.unlink); D.members = await ctx.api.listMembers(D.id); tabAccess(el, D); } catch (e) { b.disabled = false; toast(t("error_generic")); }
+      });
+    });
     $("acSave").addEventListener("click", async function () {
       $("acSt").textContent = t("saving");
       try {
