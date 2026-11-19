@@ -115,6 +115,8 @@ export function claudePrompt(client, answers) {
     "- Poštuj povrede, ograničenja, alergije, netolerancije i ishranu iz odgovora. Ako nešto zahteva lekara, napiši to u rules.",
     "- Ako je u zdravstvenim pitanjima neki odgovor „da“ (označeno [!]), dodaj u notes poruku da pre početka treba dozvola lekara.",
     "- Ne izmišljaj cene; označi ih kao procenu.",
+    "- Recepti i priprema samo uz opremu koju klijent ima („Šta imaš u kuhinji?“); ako ima samo osnovno, bez rerne i air fryera. Prilagodi ih tome ko kuva i koliko vremena ima.",
+    "- Kupovna lista (shopping) treba da stane u nedeljni budžet iz odgovora; ako ne može, napiši to u shopping.note i predloži jeftiniju zamenu.",
     "- Popuni samo delove za koje odgovori daju osnovu. Za smene napravi rhythms za svaku smenu i calendar po datumima, ako je raspored poznat.",
     "- Vrati SAMO validan JSON, bez objašnjenja i bez ``` oznaka.",
     "",
