@@ -106,7 +106,20 @@ export var PLAN_FORMAT = [
 
 var LANG_NAME = { sr: "srpski (latinica)", en: "engleski", ru: "ruski" };
 
+// Za Claude se šalje što manje ličnih podataka: inicijali umesto imena, godine umesto datuma rođenja, bez kontakta.
+var PRIVATE_FIELDS = ["contact_handle", "contact_method"];
+export function initials(name) {
+  return String(name || "").replace(/\(.*?\)/g, " ").trim().split(/\s+/).filter(Boolean).map(function (w) { return w.charAt(0).toUpperCase() + "."; }).join(" ") || "Klijent";
+}
+export function ageFrom(birth, now) {
+  var m = String(birth || "").match(/^(\d{4})-(\d{2})-(\d{2})$/); if (!m) return null;
+  var d = now || new Date(), age = d.getFullYear() - Number(m[1]);
+  if (d.getMonth() + 1 < Number(m[2]) || (d.getMonth() + 1 === Number(m[2]) && d.getDate() < Number(m[3]))) age--;
+  return age >= 0 && age < 120 ? age : null;
+}
 export function claudePrompt(client, answers) {
+  var a = Object.assign({}, answers || {}), age = ageFrom(a.birth_date);
+  delete a.birth_date; PRIVATE_FIELDS.forEach(function (k) { delete a[k]; });
   return [
     "Napravi plan za mog klijenta u formatu ReKomp plana (JSON).",
     "",
@@ -119,13 +132,14 @@ export function claudePrompt(client, answers) {
     "- Kupovna lista (shopping) treba da stane u nedeljni budžet iz odgovora; ako ne može, napiši to u shopping.note i predloži jeftiniju zamenu.",
     "- Ako su slobodni dani klizni (days_off: menjaju se ili nemam stalne), klijent ih svake nedelje sam bira u aplikaciji: weekTemplate napravi kao uobičajenu nedelju sa željenim brojem treninga, a svaki ritam (smena) neka ima free raspored za slobodan dan (wakeAt, trainingAt, meals).",
     "- Popuni samo delove za koje odgovori daju osnovu. Za smene napravi rhythms za svaku smenu i calendar po datumima, ako je raspored poznat.",
+    "- Podaci su bez imena i kontakta; u planu klijenta ne oslovljavaj imenom.",
     "- Vrati SAMO validan JSON, bez objašnjenja i bez ``` oznaka.",
     "",
     PLAN_FORMAT,
     "",
-    "KLIJENT: " + client.name,
+    "KLIJENT: " + initials(client.name) + (age != null ? ", " + age + " god." : ""),
     "",
     "ODGOVORI IZ UPITNIKA:",
-    intakeAsText(answers || {}, "sr")
+    intakeAsText(a, "sr")
   ].join("\n");
 }

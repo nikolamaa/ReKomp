@@ -11,9 +11,9 @@ export var SECTIONS = [
     id: "consent", required: true, feeds: [],
     title: L("Saglasnost", "Consent", "Согласие"),
     intro: L(
-      "Pre nego što počneš: tvoji odgovori služe samo za pravljenje i praćenje tvog plana. Vidiš ih ti i tvoj trener.",
-      "Before you start: your answers are used only to create and track your plan. Only you and your trainer can see them.",
-      "Перед началом: твои ответы используются только для составления и сопровождения твоего плана. Их видите только ты и твой тренер."
+      "Pre nego što počneš: tvoji odgovori služe samo za pravljenje i praćenje tvog plana. Vidiš ih ti i tvoj trener. Za izradu plana trener koristi AI asistenta (Claude), kome šalje odgovore bez tvog imena i kontakta.",
+      "Before you start: your answers are used only to create and track your plan. Only you and your trainer can see them. To build your plan, your trainer uses an AI assistant (Claude) and shares your answers with it without your name or contact details.",
+      "Перед началом: твои ответы используются только для составления и сопровождения твоего плана. Их видите только ты и твой тренер. Для составления плана тренер использует ИИ-ассистента (Claude) и передаёт ему ответы без твоего имени и контактов."
     ),
     fields: [
       { id: "consent_data", type: "check", required: true, label: L(
