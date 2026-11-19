@@ -160,7 +160,7 @@ export var PLAN_FORMAT = [
 var LANG_NAME = { sr: "srpski (latinica)", en: "engleski", ru: "ruski" };
 
 // Za Claude se šalje što manje ličnih podataka: inicijali umesto imena, godine umesto datuma rođenja, bez kontakta.
-var PRIVATE_FIELDS = ["contact_handle", "contact_method"];
+var PRIVATE_FIELDS = ["full_name", "contact_handle", "contact_method"];
 export function initials(name) {
   return String(name || "").replace(/\(.*?\)/g, " ").trim().split(/\s+/).filter(Boolean).map(function (w) { return w.charAt(0).toUpperCase() + "."; }).join(" ") || "Klijent";
 }
