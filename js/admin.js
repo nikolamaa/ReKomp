@@ -1,10 +1,11 @@
 // Trenerski panel: klijenti, upitnik, sekcije, plan, unosi, pristup.
-import { $, qsa, esc, parseYmd, addDays, monday, num, f1, nowHM, copyText, toast, today, isIOS, isStandalone } from "./util.js";
-import { t, getLang, fmtShortDate, fmtRange, inviteText, langSelectHtml, LANGS } from "./i18n.js";
+import { $, qsa, esc, parseYmd, addDays, monday, num, f1, nowHM, copyText, toast, today, downloadText, GEAR } from "./util.js";
+import { t, tIn, getLang, fmtShortDate, fmtRange, inviteText, langSelectHtml, LANGS } from "./i18n.js";
 import { SECTIONS, tx, fieldVisible, displayValue, isFlagged, parqPositive, sectionAnswered, defaultSections } from "./intake.js";
 import { validatePlan, claudePrompt, initials } from "./plan-format.js";
 import { brandHtml } from "./client.js";
 import { computeInsights } from "./insights.js";
+import { renderSettings } from "./settings.js";
 import { FIELD_INDEX, optionLabel } from "./intake.js";
 
 var SECTION_KEYS = ["today", "training", "nutrition", "calendar", "weekpick", "progress", "rules", "supplements"];
@@ -25,16 +26,6 @@ function planHas(k, p) {
 // ctx: { api, appName, appUrl, me, onPreview(client, plan), onOwnPlan, onLogout, onLang }
 export function mountAdmin(root, ctx) {
   var S = { clients: [], showArchived: false, q: "", detail: null, ins: null, prWeeks: 8, prMetric: "weight", prHidden: {}, menus: null, menusOk: false };
-
-  // Tekstualni fajl: preuzimanje, a u iPhone aplikaciji sa početnog ekrana deljenje (tamo preuzimanje ne radi pouzdano).
-  function downloadText(name, text) {
-    var file = null; try { file = new File([text], name, { type: "text/plain" }); } catch (e) { file = null; }
-    if (isIOS() && isStandalone() && file && navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: name }).catch(function () {}); return;
-    }
-    var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" })); a.download = name;
-    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
-  }
 
   /* ---------- meniji sa posla (za proveru planova) ---------- */
   async function loadMenus(force) {
@@ -76,21 +67,39 @@ export function mountAdmin(root, ctx) {
 
   root.innerHTML = '<header class="top"><div class="wrap"><div class="brand">' + brandHtml(ctx.appName) + ' <small class="role">' + esc(t("trainer")) + '</small></div><div class="top-r">' +
     (ctx.me && ctx.me.clientId ? '<button type="button" class="icon-btn" id="aOwn">' + esc(t("my_plan")) + "</button>" : "") +
-    langSelectHtml("aLang", getLang()) + '<button type="button" class="icon-btn" id="aLogout">' + esc(t("logout")) + "</button></div></div></header>" +
+    '<a class="icon-btn round" id="aSettings" href="#/podesavanja" aria-label="' + esc(t("settings")) + '" title="' + esc(t("settings")) + '">' + GEAR + "</a></div></div></header>" +
     '<main class="wrap"><div id="aMain" class="view"><p class="muted">' + esc(t("loading")) + "</p></div></main>";
   document.body.classList.add("no-tabs");
-  $("aLang").addEventListener("change", function () { ctx.onLang($("aLang").value); });
-  $("aLogout").addEventListener("click", function () { ctx.onLogout(); });
   if ($("aOwn")) $("aOwn").addEventListener("click", function () { ctx.onOwnPlan(); });
 
   function route() {
     var h = (location.hash || "").replace(/^#\/?/, "").split("/");
     if (h[0] === "c" && h[1]) return openClient(h[1], h[2] || "intake");
     if (h[0] === "napredak") return renderProgress();
+    if (h[0] === "podesavanja") return renderAdminSettings();
     return renderList();
   }
   window.addEventListener("hashchange", route);
   function nav(hash) { if (location.hash === hash) route(); else location.hash = hash; }
+
+  // Obaveštenje klijentu na telefon, na njegovom jeziku (ako je uključio notifikacije; tabela možda još ne postoji).
+  function notify(client, titleKey, bodyKey, text) {
+    var l = client && client.lang ? client.lang : "sr";
+    var body = bodyKey ? tIn(l, bodyKey) : String(text || "").slice(0, 200);
+    ctx.api.notifyClient(client.id, tIn(l, titleKey), body).catch(function () { /* bez notifikacija */ });
+  }
+
+  /* ---------- podešavanja ---------- */
+  function renderAdminSettings() {
+    S.detail = null;
+    var m = $("aMain");
+    m.innerHTML = '<div class="card"><a href="#/" class="linkbtn">‹ ' + esc(t("back_to_clients")) + '</a></div><div id="aSet"></div>';
+    renderSettings($("aSet"), {
+      api: ctx.api, role: "admin", me: ctx.me, settings: ctx.settings, cfg: ctx.cfg,
+      onSettings: ctx.onSettings, onLang: ctx.onLang, onLogout: ctx.onLogout
+    });
+    window.scrollTo(0, 0);
+  }
 
   /* ---------- list ---------- */
   async function renderList() {
@@ -128,7 +137,7 @@ export function mountAdmin(root, ctx) {
   }
 
   /* ---------- pregled i napredak ---------- */
-  var PALETTE = ["#F27F70", "#6FB7FF", "#7AD3A0", "#F2C14E", "#B79CFF", "#FF9DCB", "#5ED6D0", "#C9D36A", "#FFB077", "#9FB3C8"];
+  var PALETTE = ["var(--c0)", "var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)", "var(--c7)", "var(--c8)", "var(--c9)"];   // boje u styles.css (tamna i svetla tema)
   async function loadInsightData(force) {
     if (S.ins && !force && Date.now() - S.ins.at < 60000) return S.ins;
     var since = addDays(monday(today()), -7 * 12);
@@ -419,7 +428,11 @@ export function mountAdmin(root, ctx) {
     });
     $("pPub").addEventListener("click", async function () {
       var r = check(); if (!r.ok) return;
-      try { await save(r.plan, !(D.plan && D.plan.published)); toast(t("saved")); tabPlan(el, D); } catch (e) { toast(t("not_saved")); }
+      var publish = !(D.plan && D.plan.published);
+      try {
+        await save(r.plan, publish); toast(t("saved")); tabPlan(el, D);
+        if (publish) notify(D.client, "notify_plan_title", "notify_plan_body");
+      } catch (e) { toast(t("not_saved")); }
     });
     $("pPrev").addEventListener("click", function () {
       var r = check(); if (!r.ok) return;
@@ -430,7 +443,10 @@ export function mountAdmin(root, ctx) {
       var txt = $("pMsg").value.trim(); if (!txt) return;
       var d = Object.assign({}, (D.plan && D.plan.data) || {});
       d.notes = [{ date: today(), text: txt }].concat(d.notes || []);
-      try { await save(d, D.plan ? D.plan.published : false); $("pMsg").value = ""; toast(t("message_added")); $("pJson").value = JSON.stringify(d, null, 2); drawNotes(); } catch (e) { toast(t("not_saved")); }
+      try {
+        await save(d, D.plan ? D.plan.published : false); $("pMsg").value = ""; toast(t("message_added")); $("pJson").value = JSON.stringify(d, null, 2); drawNotes();
+        if (D.plan && D.plan.published) notify(D.client, "notify_msg_title", null, txt);
+      } catch (e) { toast(t("not_saved")); }
     });
     drawNotes();
   }
@@ -512,5 +528,5 @@ export function mountAdmin(root, ctx) {
   }
 
   route();
-  return { destroy: function () { window.removeEventListener("hashchange", route); } };
+  return { isAdmin: true, destroy: function () { window.removeEventListener("hashchange", route); } };
 }

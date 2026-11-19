@@ -1,10 +1,11 @@
 // Service worker: aplikacija se otvara i bez interneta; izmene stižu čim ima veze.
-var VERSION = "rekomp-v24";
+var VERSION = "rekomp-v25";
 var SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./manifest.webmanifest", "./vendor/supabase.js",
   "./js/app.js", "./js/api.js", "./js/util.js", "./js/i18n.js", "./js/intake.js", "./js/intake-ui.js",
   "./js/client.js", "./js/admin.js", "./js/plan-format.js", "./js/demo-data.js", "./js/insights.js",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/favicon.svg"
+  "./js/theme.js", "./js/settings.js",
+  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/favicon.svg", "./icons/badge-96.png"
 ];
 
 self.addEventListener("install", function (e) {
@@ -29,5 +30,31 @@ self.addEventListener("fetch", function (e) {
     return res;
   }).catch(function () {
     return caches.match(req).then(function (hit) { return hit || caches.match("./index.html"); });
+  }));
+});
+
+// Podsetnici (push): stiže šifrovana poruka { title, body, url, tag }.
+self.addEventListener("push", function (e) {
+  var d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { title: "ReKomp", body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "ReKomp", {
+    body: d.body || "",
+    icon: "./icons/icon-192.png",
+    badge: "./icons/badge-96.png",
+    tag: d.tag || "rekomp",
+    renotify: !!d.tag,
+    data: { url: d.url || "./" }
+  }));
+});
+// Klik na notifikaciju: otvori aplikaciju na pravom mestu (ili je samo prikaži ako je već otvorena).
+self.addEventListener("notificationclick", function (e) {
+  e.notification.close();
+  var url = new URL((e.notification.data && e.notification.data.url) || "./", self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (c.url.indexOf(self.registration.scope) === 0 && "focus" in c) { c.postMessage({ type: "open", url: url }); return c.focus(); }
+    }
+    return self.clients.openWindow(url);
   }));
 });

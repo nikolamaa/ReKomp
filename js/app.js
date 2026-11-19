@@ -15,7 +15,7 @@ var APP = CFG.appName || "ReKomp";
 var api = createApi(CFG);
 var root = $("app");
 var current = null;   // { destroy }
-var state = { me: null, screen: null, preview: null, ownPlan: false, recovery: RECOVERY, linkErr: LINK_ERR };
+var state = { me: null, screen: null, preview: null, ownPlan: false, recovery: RECOVERY, linkErr: LINK_ERR, settings: {} };
 function cleanHash() { try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* ignore */ } }
 
 setLang(detectLang());
@@ -24,6 +24,19 @@ document.title = APP;
 window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); window.__bip = e; });
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("./sw.js").catch(function () { /* ignore */ });
+}
+// Klik na notifikaciju dok je aplikacija otvorena: service worker javlja kuda da ide.
+if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", function (e) {
+  var d = e.data || {};
+  if (d.type !== "open") return;
+  var h = String(d.url || "").replace(/^[^#]*/, "");
+  if (/^#\//.test(h)) { if (state.me && state.me.isAdmin) { state.ownPlan = false; state.preview = null; if (location.hash === h) boot(); else { location.hash = h; if (!current || !current.isAdmin) boot(); } } return; }
+  if (current && current.nav) current.nav(h); else { location.hash = h; boot(); }
+});
+// Tema iz podešavanja naloga (ako je izabrana na drugom telefonu)
+function applySettings(d) {
+  state.settings = d || {};
+  if (window.ReTheme && d && d.theme && d.theme !== window.ReTheme.get()) window.ReTheme.set(d.theme);
 }
 window.addEventListener("offline", function () { toast(t(state.me && state.me.isAdmin && !state.ownPlan && !state.preview ? "offline_admin" : "offline")); });
 
@@ -181,9 +194,10 @@ function renderClient(client, plan, opts) {
   bindDemoBar();
   var c = mountClient($("cRoot"), {
     api: api, appName: APP, clientId: client.id, client: client, plan: plan, readonly: !!opts.readonly,
+    me: state.me, settings: state.settings, onSettings: function (d) { state.settings = d; },
     extraHeaderBtn: opts.adminSwitch ? '<button type="button" class="icon-btn" id="toAdmin">' + esc(t("trainer")) + "</button>" : "",
     onEditIntake: async function () { var it = await api.getIntake(client.id); renderIntake(client, it, { back: true }); },
-    onLogout: async function () { await api.signOut(); boot(); },
+    onLogout: async function () { await api.signOut(); state.settingsLoaded = false; boot(); },
     onExitPreview: opts.onExitPreview,
     onLang: changeLang
   });
@@ -198,7 +212,10 @@ export async function boot(keepView) {
   try {
     var me = await api.whoami();
     state.me = me;
-    if (!me) { state.preview = null; setLang(detectLang()); renderAuth("login"); return; }
+    if (!me) { state.preview = null; state.settings = {}; setLang(detectLang()); renderAuth("login"); return; }
+    if (!keepView || !state.settingsLoaded) {
+      try { applySettings(await api.getMySettings()); state.settingsLoaded = true; } catch (e) { state.settings = state.settings || {}; }   // tabela možda još ne postoji
+    }
     if (state.recovery) { renderNewPassword(); return; }
     if (state.preview && me.isAdmin) {
       var pv = state.preview;
@@ -211,10 +228,11 @@ export async function boot(keepView) {
       root.innerHTML = demoBar() + '<div id="aRoot"></div>';
       bindDemoBar();
       current = mountAdmin($("aRoot"), {
-        api: api, appName: APP, appUrl: appUrl(), me: me,
+        api: api, appName: APP, appUrl: appUrl(), me: me, settings: state.settings, cfg: CFG,
+        onSettings: function (d) { state.settings = d; },
         onPreview: function (client, plan, id) { state.preview = { client: client, plan: plan, id: id }; location.hash = ""; boot(); },
         onOwnPlan: function () { state.ownPlan = true; location.hash = ""; boot(); },
-        onLogout: async function () { await api.signOut(); state.ownPlan = false; boot(); },
+        onLogout: async function () { await api.signOut(); state.ownPlan = false; state.settingsLoaded = false; boot(); },
         onRelinked: function () { boot(); },
         onLang: function (l) { setLang(l, true); boot(true); }
       });

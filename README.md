@@ -105,6 +105,23 @@ on conflict do nothing;
 
 Ako želiš i svoj lični plan u istoj aplikaciji: napravi klijenta za sebe, na kartici **Pristup** klikni **Poveži sa mojim nalogom**. U panelu se pojavi dugme **Moj plan**.
 
+### 6. Podsetnici na telefonu (notifikacije)
+
+Klijent u **Podešavanjima** bira šta mu stiže (dobro jutro i vaga, obrok pred trening, trening, upiši trening, obroci, kuvanje, poslednja kafa, spavanje, večernji unos, podesi nedelju, poruke od trenera). Aplikacija pravi raspored iz plana za 14 dana unapred, a Supabase funkcija ih šalje svakog minuta. Podsetnik se ne šalje ako je obaveza već urađena (npr. težina upisana). Trener dobija obaveštenje kad stigne upitnik i kad klijent upiše bol 6/10 ili više.
+
+Jednom (oko 15 minuta):
+
+1. **SQL Editor:** pokreni `supabase/notifications.sql`.
+2. **Edge Functions → Deploy a new function → Via Editor:** ime `send-reminders`, nalepi ceo `supabase/functions/send-reminders/index.ts`, **Deploy**. U podešavanjima funkcije isključi **Verify JWT** (funkcija sama proverava šifru).
+3. **U aplikaciji:** zupčanik → **Ključevi za notifikacije** → **Napravi ključeve**. Ključeve pravi tvoj pregledač; tajni ključ se prikazuje samo tada.
+4. **Edge Functions → Secrets:** nalepi 4 reda iz aplikacije (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`) → **Save**.
+5. **SQL Editor:** pokreni SQL koji aplikacija prikaže (cron svakog minuta, šifra u Vaultu). Isto je u `supabase/cron.sql`.
+6. U aplikaciji: **Podsetnici → Uključi notifikacije → Pošalji probnu**. Stiže za najviše minut.
+
+Provera kad nešto ne stiže: `select * from cron.job_run_details order by start_time desc limit 5;` i `select status_code, content from net._http_response order by created desc limit 5;` (odgovor funkcije: koliko je poslato).
+
+Ograničenja: iPhone samo sa aplikacijom na početnom ekranu (iOS 16.4+); podsetnik može da kasni do minut-dva, a na nekim Androidima (Xiaomi, Huawei) i više zbog štednje baterije. Ako klijent ne otvori aplikaciju 14 dana, raspored ističe.
+
 ---
 
 ## Instalacija na telefonu (za tebe i klijente)
@@ -112,7 +129,7 @@ Ako želiš i svoj lični plan u istoj aplikaciji: napravi klijenta za sebe, na 
 - **Android (Chrome):** otvori link → meni ⋮ → **Instaliraj aplikaciju** ili **Dodaj na početni ekran**.
 - **iPhone (Safari):** otvori link u Safariju → dugme **Deli** (kvadrat sa strelicom) → **Dodaj na početni ekran**.
 
-Uputstvo za instalaciju je i u samoj aplikaciji (profil klijenta) i u poruci sa pozivnim kodom. Izmene plana stižu čim klijent otvori aplikaciju sa internetom; bez interneta se otvara poslednja verzija.
+Uputstvo za instalaciju je i u samoj aplikaciji (Podešavanja → O aplikaciji) i u poruci sa pozivnim kodom. Izmene plana stižu čim klijent otvori aplikaciju sa internetom; bez interneta se otvara poslednja verzija.
 
 ---
 
@@ -127,6 +144,8 @@ Uputstvo za instalaciju je i u samoj aplikaciji (profil klijenta) i u poruci sa 
 **Klijent je prestao da trenira.** Na kartici **Pristup** postavi status **Arhiviran**. Ne vidi se u listi dok ne uključiš „Prikaži arhivirane“.
 
 **Klijent traži brisanje podataka.** **Pristup** → **Obriši klijenta** (traži da upišeš ime za potvrdu). Briše plan, upitnik i sve unose. Nalog za prijavu ostaje u Supabase **Authentication → Users**; obriši ga i tamo.
+
+**Podešavanja.** Zupčanik u zaglavlju (klijent i trener): podsetnici, tema (tamna, svetla ili kao telefon), jezik, kontakt sa trenerom (trener ga upisuje u svojim Podešavanjima: e-mail, telefon, Viber, WhatsApp, napomena), promena lozinke, preuzimanje sopstvenih podataka i zahtev za brisanje naloga (mejl treneru).
 
 **Rezervna kopija.** Besplatan Supabase nema automatske kopije. Jednom nedeljno u panelu klikni **Rezervna kopija** i sačuvaj preuzeti fajl (sadrži zdravstvene podatke klijenata, čuvaj ga kao poverljiv).
 
@@ -159,22 +178,25 @@ Ova aplikacija je PWA (web aplikacija koja se instalira sa sajta), pa ne treba A
 
 | Fajl | Šta je |
 |---|---|
-| `index.html`, `styles.css` | stranica i izgled (tamna tema) |
+| `index.html`, `styles.css`, `js/theme.js` | stranica i izgled (tamna i svetla tema) |
 | `config.js` | adresa baze i ključ |
 | `js/app.js` | prijava, upitnik, preusmeravanje |
 | `js/intake.js` | pitanja upitnika (sva tri jezika) |
 | `js/intake-ui.js` | prikaz upitnika korak po korak |
 | `js/client.js` | klijentska strana: Danas, Trening, Ishrana, Kalendar, Napredak |
 | `js/admin.js` | trenerski panel |
+| `js/settings.js` | Podešavanja i uključivanje notifikacija |
 | `js/insights.js` | pregled napretka i upozorenja za trenera |
 | `js/plan-format.js` | provera plana i tekst za Claude |
 | `js/i18n.js` | prevodi (srpski, engleski, ruski) |
 | `js/api.js` | rad sa bazom i demo režim |
 | `js/demo-data.js` | izmišljeni primeri za demo |
-| `supabase/schema.sql` | tabele i pravila pristupa |
+| `supabase/schema.sql` | tabele i pravila pristupa (sve) |
+| `supabase/notifications.sql`, `supabase/cron.sql` | podešavanja, kontakt i podsetnici; slanje svakog minuta |
+| `supabase/functions/send-reminders/index.ts` | Supabase funkcija koja šalje notifikacije (Web Push) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | instalacija na telefon i rad bez interneta |
 | `PLAN_FORMAT.md` | opis formata plana |
 
-Kad menjaš kod, u `sw.js` povećaj `VERSION` (npr. `rekomp-v2`) da telefoni sigurno preuzmu novu verziju.
+Kad menjaš kod, u `sw.js` povećaj `VERSION` (npr. `rekomp-v26`) i isti broj u `APP_VERSION` u `js/util.js` da telefoni sigurno preuzmu novu verziju.
 
 Lokalna proba bez interneta: u folderu aplikacije pokreni `python3 -m http.server 8000` i otvori `http://localhost:8000`.

@@ -1,6 +1,7 @@
-// Klijentska strana: Danas, Trening, Ishrana, Kalendar, Napredak, Plan, Profil.
+// Klijentska strana: Danas, Trening, Ishrana, Kalendar, Napredak, Plan, Podešavanja (i podsetnici).
 // Sekcija se prikazuje samo ako je uključena i plan za nju ima sadržaj.
-import { $, qsa, esc, ymd, parseYmd, addDays, monday, weekdayKey, num, badNum, f1, fnum, hm, fmtMin, nowHM, lsGet, lsSet, lsDel, isStandalone, isIOS, toast } from "./util.js";
+import { $, qsa, esc, ymd, parseYmd, addDays, monday, weekdayKey, num, badNum, f1, fnum, hm, fmtMin, nowHM, lsGet, lsSet, lsDel, isStandalone, isIOS, toast, GEAR } from "./util.js";
+import { renderSettings, CLIENT_KINDS, notifPrefs, ensurePush } from "./settings.js";
 import { t, getLang, fmtShortDate, fmtLongDate, fmtRange, dayLong, langSelectHtml } from "./i18n.js";
 
 var COLORS = ["blue", "red", "green", "amber", "violet"];
@@ -11,7 +12,7 @@ var ICON = {
   calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
   progress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16M5.5 15.5l4-4.5 3.5 3 5.5-7"/></svg>',
   plan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2-2h11v15H7a2 2 0 0 0-2 2z"/><path d="M5 20a2 2 0 0 0 2 1h11v-3"/></svg>',
-  profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'
+  settings: GEAR
 };
 var TAB_LABEL = { training: "tab_training", nutrition: "tab_food", today: "tab_today", calendar: "tab_calendar", progress: "tab_progress" };
 var EXTRAS = [["water", { sr: "Voda", en: "Water", ru: "Вода" }], ["steps", { sr: "Koraci", en: "Steps", ru: "Шаги" }], ["supps", { sr: "Suplementi", en: "Supplements", ru: "Добавки" }]];
@@ -184,7 +185,7 @@ export function mountClient(root, ctx) {
     '<header class="top"><div class="wrap"><div class="brand">' + brandHtml(ctx.appName) + '</div><div class="top-r"><span id="hdrDate" class="hdr-date"></span>' +
     (showPlan ? '<button type="button" class="icon-btn" id="cPlanBtn" aria-label="' + esc(t("plan_btn")) + '">' + ICON.plan + "<span>" + esc(t("plan_btn")) + "</span></button>" : "") +
     (ctx.extraHeaderBtn || "") +
-    '<button type="button" class="icon-btn round" id="cProfileBtn" aria-label="' + esc(t("profile")) + '">' + ICON.profile + "</button></div></div></header>" +
+    '<button type="button" class="icon-btn round" id="cSettingsBtn" aria-label="' + esc(t("settings")) + '" title="' + esc(t("settings")) + '">' + ICON.settings + "</button></div></div></header>" +
     '<main class="wrap" id="cMain">' +
     '<section id="v-danas" class="view">' +
       '<div id="hero" class="card hero"><p class="muted">' + esc(t("loading")) + "</p></div>" +
@@ -199,13 +200,13 @@ export function mountClient(root, ctx) {
     '<section id="v-calendar" class="view" hidden></section>' +
     '<section id="v-progress" class="view" hidden></section>' +
     '<section id="v-plan" class="view" hidden></section>' +
-    '<section id="v-profile" class="view" hidden></section>' +
+    '<section id="v-settings" class="view" hidden></section>' +
     '<section id="v-week" class="view" hidden></section>' +
     "</main>" +
     (TABS.length > 1 ? '<nav class="tabs" aria-label="' + esc(t("tab_today")) + '"><div class="inner" style="grid-template-columns:repeat(' + TABS.length + ',minmax(0,1fr))">' + TABS.map(tabBtn).join("") + "</div></nav>" : "");
   document.body.classList.toggle("no-tabs", TABS.length <= 1);
 
-  var VIEWS = ["danas", "training", "nutrition", "calendar", "progress", "plan", "profile", "week"];
+  var VIEWS = ["danas", "training", "nutrition", "calendar", "progress", "plan", "settings", "week"];
   function go(view) {
     if (VIEWS.indexOf(view) < 0) view = "danas";
     if (view === "week" && !S.wp) view = "danas";
@@ -218,11 +219,11 @@ export function mountClient(root, ctx) {
     qsa(".tabs button", root).forEach(function (b) { if (b.dataset.view === view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
     window.scrollTo(0, 0);
     if (view === "calendar") { S.calScrolled = false; setTimeout(scrollCal, 0); }
-    if (view === "profile") renderProfile();
+    if (view === "settings") renderSettingsView();
   }
   qsa(".tabs button", root).forEach(function (b) { b.addEventListener("click", function () { go(b.dataset.view); }); });
   if ($("cPlanBtn")) $("cPlanBtn").addEventListener("click", function () { go(S.view === "plan" ? "danas" : "plan"); });
-  $("cProfileBtn").addEventListener("click", function () { go(S.view === "profile" ? "danas" : "profile"); });
+  $("cSettingsBtn").addEventListener("click", function () { go(S.view === "settings" ? "danas" : "settings"); });
   if ($("cExitPreview")) $("cExitPreview").addEventListener("click", function () { if (ctx.onExitPreview) ctx.onExitPreview(); });
 
   /* ---------- writes ---------- */
@@ -267,7 +268,7 @@ export function mountClient(root, ctx) {
       var ttl = tr.easy === "walk" ? t("easy_walk") : t("training_word") + ": " + (w.title || tr.code) + (tr.easy === "light" ? " · " + t("easy_light_tag") : "");
       var sub = tr.easy === "walk" ? t("easy_walk_sub") : (tr.easy === "light" ? t("easy_light_sub") : [w.focus, w.duration].filter(Boolean).join(" · ") + (tr.note ? ". " + tr.note : ""));
       if (tr.movedIn) sub = t("easy_moved_in") + ". " + sub;
-      if (at != null) items.push({ at: at, o: 1, kind: "train", color: w._color, code: tr.code, title: ttl, sub: sub });
+      if (at != null) items.push({ at: at, o: 1, kind: "train", color: w._color, code: tr.code, title: ttl, sub: sub, easy: tr.easy || null });
     }
     var cookAt = hm(e.cookAt || r.cookAt);
     if (e.cook && cookAt != null && on("nutrition")) {
@@ -277,7 +278,7 @@ export function mountClient(root, ctx) {
     if (work && hm(r.shiftStartAt) != null) items.push({ at: hm(r.shiftStartAt), o: 1, kind: "shift", title: t("shift_start"), sub: [r.hours, t("stand_up")].filter(Boolean).join(". ") });
     if (work && hm(r.shiftEndAt) != null) items.push({ at: hm(r.shiftEndAt), o: 1, kind: "shift", title: t("shift_end"), sub: (trainAt(day) != null && r.endTipTrain) || r.endTip || "" });
     if (hm(r.coffeeAt) != null) items.push({ at: hm(r.coffeeAt), o: 4, kind: "coffee", title: t("last_coffee"), sub: t("last_coffee_sub") });
-    if (hm(r.napAt) != null && (work || r.napOnFree)) items.push({ at: hm(r.napAt), o: 1, kind: "sleep", title: t("nap"), sub: r.nap || "" });
+    if (hm(r.napAt) != null && (work || r.napOnFree)) items.push({ at: hm(r.napAt), o: 1, kind: "sleep", nap: true, title: t("nap"), sub: r.nap || "" });
     if (hm(r.sleepAt) != null) items.push({ at: hm(r.sleepAt), o: 5, kind: "sleep", title: t("sleep"), sub: r.sleep ? t("sleep_goal", { x: r.sleep }) : "" });
     items.sort(function (a, b) { return a.at - b.at || a.o - b.o; });
     return items;
@@ -353,6 +354,7 @@ export function mountClient(root, ctx) {
     if (eb && !ctx.readonly) {
       var eday = eb.dataset.day, ev = eb.dataset.easy || null;
       writeDaily(eday, { easy: ev }).then(function (r) { toast(r.queued ? t("saved_offline") : t(ev ? "easy_saved" : "easy_removed")); });
+      scheduleRemSync();
       renderDanas(); if (S.trCode) renderTrForm(true);
       return;
     }
@@ -816,7 +818,7 @@ export function mountClient(root, ctx) {
     if (el.id === "wpSave" && !ctx.readonly) {
       var days = wpDays(), m = S.wp.m;
       $("wpSt").textContent = t("saving"); el.disabled = true;
-      try { await ctx.api.saveWeek(ctx.clientId, m, days); S.weeks[m] = days; S.wp.saved = t("wp_saved"); renderAll(); renderWp(); }
+      try { await ctx.api.saveWeek(ctx.clientId, m, days); S.weeks[m] = days; S.wp.saved = t("wp_saved"); renderAll(); renderWp(); scheduleRemSync(); }
       catch (err) { $("wpSt").textContent = t("not_saved"); el.disabled = false; }
     }
   });
@@ -929,16 +931,105 @@ export function mountClient(root, ctx) {
     }).join("") + "</ul></div>";
     v.innerHTML = html;
   }
-  function renderProfile() {
-    var v = $("v-profile");
-    v.innerHTML = '<div class="card"><h2>' + esc(t("profile_title")) + "</h2>" + (ctx.client ? '<p class="muted">' + esc(ctx.client.name) + "</p>" : "") +
-      '<div class="field"><label for="pLang">' + esc(t("lang")) + "</label>" + langSelectHtml("pLang", getLang()) + "</div>" +
-      '<div class="actions">' + (ctx.onEditIntake && !ctx.readonly ? '<button type="button" class="btn ghost" id="pIntake">' + esc(t("my_answers")) + "</button>" : "") +
-      (ctx.onLogout && !ctx.readonly ? '<button type="button" class="btn ghost" id="pLogout">' + esc(t("logout")) + "</button>" : "") + "</div></div>" +
-      '<div class="card"><h3>' + esc(t("install_help")) + '</h3><p class="small">Android: ' + esc(t("install_android")) + '</p><p class="small">iPhone: ' + esc(t("install_ios")) + "</p></div>";
-    $("pLang").addEventListener("change", function () { if (ctx.onLang) ctx.onLang($("pLang").value); });
-    if ($("pIntake")) $("pIntake").addEventListener("click", function () { ctx.onEditIntake(); });
-    if ($("pLogout")) $("pLogout").addEventListener("click", function () { ctx.onLogout(); });
+  function renderSettingsView() {
+    var v = $("v-settings");
+    if (ctx.readonly) {
+      v.innerHTML = '<div class="card"><h2>' + esc(t("settings")) + "</h2>" + (ctx.client ? '<p class="muted">' + esc(ctx.client.name) + "</p>" : "") + '<p class="small muted">' + esc(t("preview_banner")) + "</p></div>";
+      return;
+    }
+    renderSettings(v, {
+      api: ctx.api, role: "client", me: ctx.me, client: ctx.client, settings: SETTINGS, kinds: availableKinds(),
+      preview: function (prefs) { return computeReminders(prefs, Date.now(), 3); },
+      onSettings: function (d) { SETTINGS = d; if (ctx.onSettings) ctx.onSettings(d); scheduleRemSync(); },
+      onLang: ctx.onLang, onLogout: ctx.onLogout, onEditIntake: ctx.onEditIntake, exportData: exportData
+    });
+  }
+  async function exportData() {
+    var it = null; try { it = await ctx.api.getIntake(ctx.clientId); } catch (e) { it = null; }
+    return { app: "ReKomp", exported_at: new Date().toISOString(), account: ctx.me ? ctx.me.email : null,
+      client: ctx.client ? { name: ctx.client.name, lang: ctx.client.lang } : null,
+      intake: it ? { answers: it.answers, submitted_at: it.submitted_at } : null,
+      plan: P, daily: S.daily, sessions: S.sessions, weeks: S.weeks, settings: SETTINGS };
+  }
+
+  /* ---------- podsetnici (notifikacije) ---------- */
+  // Raspored podsetnika se pravi iz istog dnevnog rasporeda koji klijent vidi na Danas i šalje se bazi za ~14 dana unapred.
+  var SETTINGS = Object.assign({}, ctx.settings || {});
+  function availableKinds() {
+    var rh = RH_KEYS.map(function (k) { return RH[k]; });
+    var cal = Object.keys(P.calendar || {}).map(function (k) { return P.calendar[k]; }).concat(Object.keys(P.weekTemplate || {}).map(function (k) { return P.weekTemplate[k]; }));
+    var has = {
+      wake: CI.weight && rh.some(function (r) { return hm(r.wakeAt) != null || (r.free && hm(r.free.wakeAt) != null); }),
+      pretrain: on("training"), train: on("training"), log: on("training"), meal: on("nutrition"),
+      cook: on("nutrition") && cal.some(function (e) { return e && e.cook; }),
+      coffee: rh.some(function (r) { return hm(r.coffeeAt) != null; }),
+      sleep: rh.some(function (r) { return hm(r.sleepAt) != null; }),
+      checkin: true, weekpick: on("weekpick"), trainer: true
+    };
+    return CLIENT_KINDS.filter(function (x) { return has[x.k]; });
+  }
+  function durText(min) { var h = Math.floor(min / 60), m = min % 60; return [h ? h + " " + t("hours_short") : "", m ? m + " " + t("minutes_short") : ""].filter(Boolean).join(" "); }
+  function durMin(w) { var m = String((w && w.duration) || "").match(/(\d+)/); var n = m ? Number(m[1]) : 60; return n >= 15 && n <= 180 ? n : 60; }
+  function atDate(day, min) { var d = parseYmd(day); d.setMinutes(min); return d; }
+  function computeReminders(prefs, fromMs, days) {
+    var out = [], start = activeDay(), K = prefs.kinds, av = {};
+    availableKinds().forEach(function (x) { av[x.k] = true; });
+    function want(k) { return K[k] && av[k]; }
+    for (var i = 0; i < days; i++) {
+      var day = addDays(start, i), items = buildTimeline(day);
+      if (!items.length) continue;
+      var add = function (kind, min, title, body, url, ref) {
+        var d = atDate(day, min); if (d.getTime() <= fromMs) return;
+        out.push({ kind: kind, day: day, ref: ref || null, at: d, title: String(title || "").slice(0, 120), body: String(body || "").slice(0, 300), url: url });
+      };
+      items.forEach(function (it) {
+        if (it.kind === "wake" && want("wake")) add("wake", it.at, t("r_wake_t"), t("r_wake_b"), "./#danas");
+        else if (it.kind === "meal" && want("meal")) add("meal", it.at, it.title + " · " + fmtMin(it.at), [it.sub, it.protein ? t("r_protein", { g: it.protein }) : ""].filter(Boolean).join(" · "), "./#danas");
+        else if (it.kind === "coffee" && want("coffee")) add("coffee", it.at, t("last_coffee"), t("last_coffee_sub"), "./#danas");
+        else if (it.kind === "cook" && want("cook")) add("cook", it.at, it.title, it.sub, "./#nutrition");
+        else if (it.kind === "sleep" && !it.nap && want("sleep")) add("sleep", it.at - 30, t("r_sleep_t"), it.sub || t("r_sleep_b"), "./#danas");
+        else if (it.kind === "train") {
+          var w = WK[it.code] || {}, wn = w.title || it.code, walk = it.easy === "walk";
+          if (want("pretrain") && !walk) {
+            var lead = prefs.lead, meal = items.filter(function (m) { return m.kind === "meal" && m.at <= it.at - 20 && m.at >= it.at - lead - 60; }).pop();
+            add("pretrain", it.at - lead, t("r_pre_t", { x: durText(lead) }),
+              t("r_pre_b", { w: wn, time: fmtMin(it.at) }) + (meal ? " " + t("r_pre_meal", { m: meal.title, time: fmtMin(meal.at), what: meal.sub || "" }) : ""), "./#training", it.code);
+          }
+          if (want("train")) add("train", it.at - 15, walk ? t("r_walk_t") : t("r_train_t", { w: wn }), it.sub, "./#training", it.code);
+          if (want("log") && !walk) add("log", it.at + durMin(w) + 15, t("r_log_t"), t("r_log_b", { w: wn }), "./#training", it.code);
+        }
+      });
+      if (want("checkin")) {
+        var sl = items.filter(function (x) { return x.kind === "sleep" && !x.nap; }).pop();
+        add("checkin", sl ? sl.at - 60 : 21 * 60, t("r_ci_t"), t("r_ci_b"), "./#danas");
+      }
+      if (want("weekpick")) {
+        var wd = parseYmd(day).getDay();
+        if (wd === 6 || wd === 0) {
+          var nm = addDays(monday(day), 7);
+          if (!S.weeks[nm]) add("weekpick", wd === 6 ? 10 * 60 : 19 * 60, t("r_week_t"), t("r_week_b", { x: fmtRange(parseYmd(nm), parseYmd(addDays(nm, 6))) }), "./#week", nm);
+        }
+      }
+    }
+    return out.sort(function (a, b) { return a.at - b.at; });
+  }
+  var remTimer = null;
+  function scheduleRemSync() { if (ctx.readonly || !ctx.api.setReminders) return; clearTimeout(remTimer); remTimer = setTimeout(syncReminders, 1500); }
+  function hashStr(x) { var h = 5381; for (var i = 0; i < x.length; i++) h = ((h << 5) + h + x.charCodeAt(i)) | 0; return x.length + ":" + h; }
+  async function syncReminders() {
+    var prefs = notifPrefs(SETTINGS, CLIENT_KINDS), key = "rekomp-rem-" + ctx.clientId, last = lsGet(key) || {};
+    var items = prefs.on ? computeReminders(prefs, Date.now() + 60000, 14).map(function (r) {
+      return { kind: r.kind, day: r.day, ref: r.ref, at: r.at.toISOString(), title: r.title, body: r.body, url: r.url };
+    }) : [];
+    var hash = hashStr(JSON.stringify(items));
+    if (last.hash === hash && (!items.length || Date.now() - (last.t || 0) < 12 * 3600 * 1000)) return;
+    try { await ctx.api.setReminders(items); lsSet(key, { hash: hash, t: Date.now(), n: items.length }); } catch (e) { /* bez tabele ili bez interneta: probaće sledeći put */ }
+  }
+  // Klik na notifikaciju: otvori pravi deo aplikacije
+  function nav(h) {
+    h = String(h || "").replace(/^\.?\/?#?/, "");
+    if (h === "week") { var pw = on("weekpick") ? (promptWeek() || addDays(monday(activeDay()), 7)) : null; if (pw) { openWeek(pw); return; } h = "danas"; }
+    go(h || "danas");
   }
 
   /* ---------- start ---------- */
@@ -950,7 +1041,8 @@ export function mountClient(root, ctx) {
     else renderTrForm(false);
   }
   buildTraining(); buildNutrition();
-  go((location.hash || "").replace("#", "") || "danas");
+  var startHash = (location.hash || "").replace("#", "");
+  go(startHash === "week" ? "danas" : (startHash || "danas"));
   renderAll();
   async function loadData() {
     try {
@@ -968,9 +1060,12 @@ export function mountClient(root, ctx) {
         S.weeks = wm; S.weeksOk = true;
       } catch (e2) { S.weeksOk = false; }
       renderAll();
+      if (startHash === "week") { startHash = ""; nav("week"); }
+      scheduleRemSync();
     } catch (e) { /* offline: keep what we have */ }
   }
   loadData();
+  if (!ctx.readonly) ensurePush(ctx.api, SETTINGS);
   S.timer = setInterval(function () {
     if (S.view === "danas" && !S.ciDirty && !root.querySelector("#hero details.easy[open]") && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#checkin"))) renderDanas();
   }, 60000);
@@ -979,8 +1074,10 @@ export function mountClient(root, ctx) {
   window.addEventListener("pagehide", onVis);
 
   return {
-    destroy: function () { clearInterval(S.timer); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", onVis); window.removeEventListener("online", onOnline); if (saveTimer) flushSession(false); },
+    destroy: function () { clearInterval(S.timer); clearTimeout(remTimer); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", onVis); window.removeEventListener("online", onOnline); if (saveTimer) flushSession(false); },
     reloadData: loadData,
+    nav: nav,
+    reminders: function (prefs, days) { return computeReminders(prefs || notifPrefs(SETTINGS, CLIENT_KINDS), Date.now(), days || 14); },
     view: function () { return S.view; }
   };
 }

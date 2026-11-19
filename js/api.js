@@ -101,6 +101,27 @@ function supaApi(cfg) {
       return unwrap(await sb.from("week_plans").upsert({ client_id: cid, week: week, days: days }).select("week").single());
     },
 
+    // podešavanja, kontakt trenera, notifikacije (notifications.sql)
+    async getMySettings() {
+      var s = (await sb.auth.getSession()).data.session; if (!s) return {};
+      var d = unwrap(await sb.from("user_settings").select("data").eq("user_id", s.user.id).maybeSingle());
+      return d ? d.data || {} : {};
+    },
+    async saveMySettings(data) {
+      var s = (await sb.auth.getSession()).data.session; if (!s) throw err("auth");
+      unwrap(await sb.from("user_settings").upsert({ user_id: s.user.id, data: data }).select("user_id").single());
+    },
+    async getAppSetting(key) { var d = unwrap(await sb.from("app_settings").select("data").eq("key", key).maybeSingle()); return d ? d.data : null; },
+    async saveAppSetting(key, data) { unwrap(await sb.from("app_settings").upsert({ key: key, data: data }).select("key").single()); },
+    async savePushSub(sub) {
+      var r = await sb.rpc("save_push_sub", { p_endpoint: sub.endpoint, p_p256dh: sub.keys.p256dh, p_auth: sub.keys.auth, p_ua: navigator.userAgent.slice(0, 200) });
+      if (r.error) throw err("db", r.error.message);
+    },
+    async deletePushSub(endpoint) { unwrap(await sb.from("push_subs").delete().eq("endpoint", endpoint)); },
+    async setReminders(items) { var r = await sb.rpc("set_reminders", { p_items: items }); if (r.error) throw err("db", r.error.message); return r.data; },
+    async testReminder(title, body) { var r = await sb.rpc("test_reminder", { p_title: title, p_body: body }); if (r.error) throw err(/rate/.test(r.error.message) ? "rate" : "db", r.error.message); },
+    async notifyClient(cid, title, body) { var r = await sb.rpc("notify_client", { p_client: cid, p_title: title, p_body: body }); if (r.error) throw err("db", r.error.message); return r.data; },
+
     // trener
     async listClients() {
       var clients = unwrap(await sb.from("clients").select("*").order("created_at", { ascending: false }));
@@ -156,8 +177,8 @@ function supaApi(cfg) {
     },
     async exportAll() {
       var T = { admins: ["user_id"], clients: ["id"], client_private: ["client_id"], client_members: ["user_id"], intakes: ["client_id"], plans: ["client_id"], daily_logs: ["client_id", "day"], sessions: ["client_id", "day", "workout"], week_plans: ["client_id", "week"] };
-      T.trainer_files = ["key"];
-      var OPTIONAL = ["week_plans", "trainer_files"], out = {};
+      T.trainer_files = ["key"]; T.app_settings = ["key"];
+      var OPTIONAL = ["week_plans", "trainer_files", "app_settings"], out = {};
       for (var name in T) {
         try { out[name] = await fetchAll(function () { var q = sb.from(name).select("*"); T[name].forEach(function (c) { q = q.order(c); }); return q; }); }
         catch (e) { if (OPTIONAL.indexOf(name) >= 0) out[name] = null; else throw e; }   // tabela možda još nije napravljena
@@ -270,6 +291,15 @@ function demoApi() {
       return Object.keys(m).sort().map(function (w) { return { week: w, days: clone(m[w]) }; });
     },
     async saveWeek(cid, week, days) { var s = load(); guardClient(s, cid); s.weeks = s.weeks || {}; s.weeks[cid] = s.weeks[cid] || {}; s.weeks[cid][week] = clone(days); store(s); return { week: week }; },
+    async getMySettings() { var s = load(), u = me(s); if (!u) return {}; return clone((s.settings || {})[u.id] || {}); },
+    async saveMySettings(data) { var s = load(), u = me(s); if (!u) throw err("auth"); s.settings = s.settings || {}; s.settings[u.id] = clone(data); store(s); },
+    async getAppSetting(key) { var s = load(), u = me(s); if (!u || (!isAdmin(s, u.id) && !memberOf(s, u.id))) return null; return clone((s.app || {})[key] || null); },
+    async saveAppSetting(key, data) { var s = load(); guardAdmin(s); s.app = s.app || {}; s.app[key] = clone(data); store(s); },
+    async savePushSub(sub) { var s = load(), u = me(s); if (!u) throw err("auth"); s.subs = (s.subs || []).filter(function (x) { return x.endpoint !== sub.endpoint; }); s.subs.push({ endpoint: sub.endpoint, user_id: u.id }); store(s); },
+    async deletePushSub(endpoint) { var s = load(); s.subs = (s.subs || []).filter(function (x) { return x.endpoint !== endpoint; }); store(s); },
+    async setReminders(items) { var s = load(), u = me(s); if (!u) throw err("auth"); var cid = memberOf(s, u.id); if (!cid) throw err("no_client"); s.reminders = s.reminders || {}; s.reminders[u.id] = clone(items); store(s); return items.length; },
+    async testReminder() { var s = load(), u = me(s); if (!u) throw err("auth"); s.tests = (s.tests || 0) + 1; store(s); },
+    async notifyClient(cid, title, body) { var s = load(); guardAdmin(s); s.notices = s.notices || []; s.notices.push({ client_id: cid, title: title, body: body, at: nowIso() }); store(s); return s.members.filter(function (m) { return m.client_id === cid; }).length; },
     async listWorkMenus() { var s = load(); guardAdmin(s); var m = s.menus || {}; return Object.keys(m).map(function (k) { return clone(m[k]); }); },
     async saveWorkMenu(menu) { var s = load(); guardAdmin(s); s.menus = s.menus || {}; s.menus[menu.id] = Object.assign(clone(menu), { savedAt: nowIso() }); store(s); return { key: "menu:" + menu.id }; },
     async listSessions(cid) {
