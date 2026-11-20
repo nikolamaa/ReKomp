@@ -64,6 +64,21 @@ export function extractPlanJson(text) {
   return best ? { json: best, extracted: true } : { json: s, extracted: false };
 }
 
+// Koji delovi plana se razlikuju (za Istoriju plana). Poruke (notes) i oznaka verzije se ne računaju.
+var DIFF_PART = { program: "pd_program", rhythms: "pd_meals", defaultRhythm: "pd_meals", recipes: "pd_recipes", shopping: "pd_shopping",
+  calendar: "pd_calendar", weekTemplate: "pd_calendar", noTrainDays: "pd_calendar", targets: "pd_targets", baseline: "pd_targets", start: "pd_targets",
+  checkin: "pd_checkin", rules: "pd_rules", nutritionRules: "pd_rules", supplements: "pd_supplements", workMenu: "pd_work", workplace: "pd_work" };
+export function planDiff(a, b) {
+  a = a || {}; b = b || {};
+  var out = [], keys = Object.keys(a).concat(Object.keys(b)).filter(function (k, i, arr) { return arr.indexOf(k) === i && k !== "notes" && k !== "version"; });
+  keys.forEach(function (k) {
+    if (JSON.stringify(a[k] === undefined ? null : a[k]) === JSON.stringify(b[k] === undefined ? null : b[k])) return;
+    var part = DIFF_PART[k] || "pd_other";
+    if (out.indexOf(part) < 0) out.push(part);
+  });
+  return out;
+}
+
 export function validatePlan(text, opts) {
   var errors = [], warnings = [], p, ex = null;
   if (typeof text === "string") { ex = extractPlanJson(text); text = ex.json; }

@@ -1,6 +1,6 @@
 // Prikaz upitnika: korak po korak, pa pregled. Isti prikaz služi i za kasnije izmene.
 import { esc, debounce, qsa } from "./util.js";
-import { t, getLang } from "./i18n.js";
+import { t, getLang, tLinks } from "./i18n.js";
 import { SECTIONS, tx, fieldVisible, sectionAnswered, missingRequired } from "./intake.js";
 
 function fieldHtml(f, v, lang) {
@@ -83,6 +83,7 @@ export function mountIntake(root, opts) {
       "<h2>" + esc(tx(s.title, lang)) + "</h2>" +
       (step === 0 && !submitted ? '<p class="muted">' + esc(t("intake_intro")) + "</p>" : "") +
       (s.intro ? '<p class="muted">' + esc(tx(s.intro, lang)) + "</p>" : "") +
+      (s.id === "consent" ? '<p class="small" id="iqLegal">' + tLinks("consent_more", { privacy: "legal_privacy_loc" }) + "</p>" : "") +
       '<form id="iqForm" class="q-list" autocomplete="off" novalidate>' + s.fields.map(function (f) { return fieldHtml(f, answers[f.id], lang); }).join("") + "</form>" +
       '<p id="iqErr" class="form-err" role="alert" hidden></p>' +
       '<div class="actions intake-actions">' +

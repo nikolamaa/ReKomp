@@ -122,6 +122,23 @@ Provera kad nešto ne stiže: `select * from cron.job_run_details order by start
 
 Ograničenja: iPhone samo sa aplikacijom na početnom ekranu (iOS 16.4+); podsetnik može da kasni do minut-dva, a na nekim Androidima (Xiaomi, Huawei) i više zbog štednje baterije. Ako klijent ne otvori aplikaciju 14 dana, raspored ističe.
 
+### 7. Istorija plana
+
+**SQL Editor:** pokreni `supabase/plan_versions.sql` (jednom). Od tada se pri svakom **Sačuvaj izmene** prethodna verzija plana čuva (najviše 50 po klijentu; poruke klijentu se ne računaju). Na kartici **Plan → Istorija plana**: **Pogledaj** pokazuje šta se razlikuje od sadašnjeg plana, **Učitaj u polje** vraća tu verziju u polje, pa **Proveri → Sačuvaj izmene**. I samo vraćanje se pamti, pa može nazad.
+
+### 8. Rezervna kopija na mejl
+
+Svakog ponedeljka u 3:40 (leti 4:40) funkcija `weekly-backup` pročita sve tabele, sabije ih i šifruje lozinkom (AES-256), i pošalje fajl na tvoj mejl. U tekstu mejla nema ličnih podataka, samo brojevi (klijenata, unosa…). Jednom (oko 10 minuta):
+
+1. **Resend → API Keys → Create API key:** ime `supabase-backup`, **Sending access**, domen **mail.rekomp.me**. Kopiraj ključ (prikazuje se jednom).
+2. **Edge Functions → Deploy a new function → Via Editor:** ime `weekly-backup`, nalepi ceo `supabase/functions/weekly-backup/index.ts`, **Deploy**. U podešavanjima funkcije isključi **Verify JWT**.
+3. **Edge Functions → Secrets → Add:** `RESEND_API_KEY` = ključ iz koraka 1, i `BACKUP_PASSWORD` = lozinka za otvaranje kopija (bar 12 znakova). **Lozinku zapiši** (npr. u Google Password Manager): bez nje kopija ne može da se otvori. `CRON_SECRET` već postoji. Ako kopija treba da ide na drugu adresu, dodaj i `BACKUP_TO`.
+4. **SQL Editor:** pokreni `supabase/backup.sql` (zakazuje slanje ponedeljkom; koristi istu šifru kao podsetnici).
+5. **U aplikaciji:** zupčanik → **Rezervna kopija na mejl → Pošalji kopiju sada**. Za minut stiže mejl „ReKomp: rezervna kopija …“ sa fajlom `rekomp-sifrovana-kopija-….json`.
+6. Proba otvaranja: ista kartica → **Otvori kopiju iz mejla** → izaberi fajl → upiši lozinku → **Otvori**. Treba da piše broj klijenata i unosa.
+
+Kartica pokazuje kad je poslata poslednja kopija, a ako nije uspela i zašto (npr. nema `BACKUP_PASSWORD`). Kopije starije od 3 meseca obriši iz mejla (tako piše u Politici privatnosti); u Gmailu pretraga `subject:"ReKomp: rezervna kopija" older_than:90d`.
+
 ---
 
 ## Instalacija na telefonu (za tebe i klijente)
@@ -147,7 +164,7 @@ Uputstvo za instalaciju je i u samoj aplikaciji (Podešavanja → O aplikaciji) 
 
 **Podešavanja.** Zupčanik u zaglavlju (klijent i trener): podsetnici, tema (tamna, svetla ili kao telefon), jezik, kontakt sa trenerom (trener ga upisuje u svojim Podešavanjima: e-mail, telefon, Viber, WhatsApp, napomena), promena lozinke, preuzimanje sopstvenih podataka i zahtev za brisanje naloga (mejl treneru).
 
-**Rezervna kopija.** Besplatan Supabase nema automatske kopije. Jednom nedeljno u panelu klikni **Rezervna kopija** i sačuvaj preuzeti fajl (sadrži zdravstvene podatke klijenata, čuvaj ga kao poverljiv).
+**Rezervna kopija.** Besplatan Supabase nema automatske kopije. Šifrovana kopija stiže mejlom svakog ponedeljka (korak 8). Ručno: u panelu **Rezervna kopija** preuzima nešifrovan fajl (sadrži zdravstvene podatke klijenata, čuvaj ga kao poverljiv i obriši kad ti ne treba).
 
 **Aplikacija ne radi nekoliko dana.** Besplatan Supabase projekat se pauzira posle oko nedelju dana bez korišćenja. Sa klijentima koji svakodnevno unose podatke to se ne dešava. Ako se desi: Supabase → projekat → **Restore**. Podaci ostaju.
 
@@ -161,6 +178,8 @@ Upitnik sadrži zdravstvene podatke (bolesti, povrede, lekovi, trudnoća). Po Za
 - Kad kopiraš upitnik u Claude, koristi svoj **lični** Claude nalog, a ne poslovni (poslovni nalog pripada firmi).
 - Zdravstveni odgovori „da“ i ozbiljne alergije su označeni. Ako PAR-Q ima „da“, pre početka traži mišljenje lekara.
 - Aplikacija nije medicinski uređaj i ne postavlja dijagnoze.
+
+Javne stranice (na tri jezika): **rekomp.me/saradnja/** (za nove klijente: šta nudiš, kako izgleda saradnja, kontakt), **rekomp.me/privatnost/** (Politika privatnosti) i **rekomp.me/uslovi/** (Uslovi korišćenja). Linkovi su na ekranu za prijavu, pri registraciji, u saglasnosti u upitniku i u Podešavanjima → O aplikaciji. Ako menjaš nešto što piše u politici (npr. novu uslugu, rokove čuvanja), promeni i stranicu i datum na vrhu.
 
 ---
 
@@ -194,9 +213,14 @@ Ova aplikacija je PWA (web aplikacija koja se instalira sa sajta), pa ne treba A
 | `supabase/schema.sql` | tabele i pravila pristupa (sve) |
 | `supabase/notifications.sql`, `supabase/cron.sql` | podešavanja, kontakt i podsetnici; slanje svakog minuta |
 | `supabase/functions/send-reminders/index.ts` | Supabase funkcija koja šalje notifikacije (Web Push) |
+| `supabase/plan_versions.sql` | istorija plana (prethodne verzije) |
+| `supabase/backup.sql`, `supabase/functions/weekly-backup/index.ts` | nedeljna šifrovana kopija na mejl |
+| `js/backup-crypto.js` | otvaranje šifrovane kopije u pregledaču |
+| `saradnja/`, `privatnost/`, `uslovi/`, `site/` | stranica za nove klijente, politika privatnosti, uslovi korišćenja |
+| `potpis/` | potpis za e-mail (kopira se u Gmail) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | instalacija na telefon i rad bez interneta |
 | `PLAN_FORMAT.md` | opis formata plana |
 
-Kad menjaš kod, u `sw.js` povećaj `VERSION` (npr. `rekomp-v26`) i isti broj u `APP_VERSION` u `js/util.js` da telefoni sigurno preuzmu novu verziju.
+Kad menjaš kod, u `sw.js` povećaj `VERSION` (npr. `rekomp-v31`) i isti broj u `APP_VERSION` u `js/util.js` da telefoni sigurno preuzmu novu verziju.
 
 Lokalna proba bez interneta: u folderu aplikacije pokreni `python3 -m http.server 8000` i otvori `http://localhost:8000`.

@@ -1,6 +1,7 @@
 // Podešavanja: podsetnici (push), tema, jezik, kontakt trenera, nalog, o aplikaciji. Deli ih klijent i trener.
 import { $, qsa, esc, toast, copyText, isIOS, isStandalone, lsGet, lsSet, today, pad, APP_VERSION, downloadText } from "./util.js";
-import { t, getLang, langSelectHtml } from "./i18n.js";
+import { t, getLang, langSelectHtml, fmtShortDate, legalLink } from "./i18n.js";
+import { decryptBackup, isEncryptedBackup, isPlainBackup, backupSummary } from "./backup-crypto.js";
 
 /* ---------- vrste podsetnika ---------- */
 // def: uključeno dok klijent ne promeni (isto kao u notifications.sql)
@@ -96,7 +97,8 @@ function pwHtml() {
 }
 function aboutCard() {
   var inst = isStandalone() ? "" : '<p class="small"><b>' + esc(t("install_help")) + '</b></p><p class="small">Android: ' + esc(t("install_android")) + '</p><p class="small">iPhone: ' + esc(t("install_ios")) + "</p>";
-  return card(t("set_about"), inst + '<p class="small muted">' + esc(t("version", { v: APP_VERSION })) + '</p><div class="actions"><button type="button" class="btn ghost small" id="pUpdate">' + esc(t("check_update")) + "</button></div>");
+  return card(t("set_about"), inst + '<p class="small muted">' + esc(t("version", { v: APP_VERSION })) + '</p><div class="actions"><button type="button" class="btn ghost small" id="pUpdate">' + esc(t("check_update")) + "</button></div>" +
+    '<p class="small set-legal" id="pLegal">' + legalLink("privacy") + " · " + legalLink("terms") + " · " + legalLink("about") + "</p>");
 }
 function kindsHtml(kinds, prefs) {
   return '<div class="set-kinds">' + kinds.map(function (x) {
@@ -183,6 +185,25 @@ export function renderSettings(el, o) {
       '<div class="actions"><button type="button" class="btn ' + (has ? "ghost " : "") + 'small" id="kGen">' + esc(has ? t("keys_regen") : t("keys_gen")) + "</button></div><div id=\"kOut\"></div>", "kCard");
   }
 
+  // Rezervna kopija na mejl (funkcija weekly-backup): stanje, slanje odmah i otvaranje šifrovane kopije iz mejla.
+  function bkWhen(iso) { var d = new Date(iso); return isNaN(d) ? "—" : fmtShortDate(d) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  function bkSize(n) { return !n ? "" : n < 1048576 ? Math.max(1, Math.round(n / 1024)) + " KB" : (n / 1048576).toFixed(1) + " MB"; }
+  function bkWhy(code) { return t({ missing_password: "bk_why_password", missing_resend: "bk_why_resend", mail_failed: "bk_why_mail", read_failed: "bk_why_read" }[code] || "bk_why_other"); }
+  function bkStatus() {
+    var b = S.backup;
+    if (!b) return '<p class="small muted" id="bkSt">' + esc(t("bk_none")) + "</p>";
+    if (b.ok) return '<p class="small ok-text" id="bkSt">' + esc(t("bk_last", { when: bkWhen(b.at), size: bkSize(b.bytes) || "—", src: t(b.source === "auto" ? "bk_auto" : "bk_manual") })) + "</p>";
+    return '<p class="small form-err" id="bkSt">' + esc(t("bk_last_fail", { when: bkWhen(b.at), why: bkWhy(b.error) })) + (b.last_ok ? " " + esc(t("bk_last_ok", { when: bkWhen(b.last_ok) })) : "") + "</p>";
+  }
+  function backupCard() {
+    return card(t("bk_title"), '<p class="small muted">' + esc(t("bk_hint")) + "</p>" + bkStatus() +
+      '<div class="actions"><button type="button" class="btn ghost small" id="bkSend">' + esc(t("bk_send")) + "</button></div>" +
+      '<details class="set-details" id="bkBox"><summary>' + esc(t("bk_open")) + '</summary><p class="small muted">' + esc(t("bk_open_hint")) + "</p>" +
+      '<div class="actions"><label class="btn ghost small" for="bkFile">' + esc(t("bk_file")) + '</label><input type="file" id="bkFile" accept=".json,application/json,text/plain" hidden><span class="small muted" id="bkName"></span></div>' +
+      '<div class="field"><label for="bkPw">' + esc(t("bk_pw")) + '</label><input id="bkPw" type="password" autocomplete="off" spellcheck="false"></div>' +
+      '<div class="actions"><button type="button" class="btn small" id="bkOpen">' + esc(t("bk_open_btn")) + '</button></div><div id="bkOut" role="status"></div></details>', "bkCard");
+  }
+
   function accountCard() {
     var h = (o.me && o.me.email ? '<p class="small muted">' + esc(t("signed_in_as", { x: o.me.email })) + "</p>" : "") + pwHtml();
     if (o.role === "client") {
@@ -202,7 +223,7 @@ export function renderSettings(el, o) {
     var name = o.role === "client" && o.client ? '<p class="muted">' + esc(o.client.name) + "</p>" : "";
     var dbWarn = o.role === "admin" && S.dbMissing ? '<p class="form-err small" id="setDbMissing">' + esc(t("set_missing_db")) + "</p>" : "";
     el.innerHTML = '<div class="card">' + (o.back || "") + "<h2>" + esc(t("settings")) + "</h2>" + name + dbWarn + "</div>" +
-      notifCard() + (o.role === "admin" ? keysCard() + contactForm() : contactCard()) + themeCard() + langCard() + accountCard() + aboutCard();
+      notifCard() + (o.role === "admin" ? keysCard() + backupCard() + contactForm() : contactCard()) + themeCard() + langCard() + accountCard() + aboutCard();
     bind();
   }
 
@@ -280,11 +301,57 @@ export function renderSettings(el, o) {
       try { await o.api.saveAppSetting("contact", c); S.contact = c; $("ctSt").textContent = t("saved_at", { time: pad(new Date().getHours()) + ":" + pad(new Date().getMinutes()) }); }
       catch (err) { $("ctSt").textContent = noDb(err) ? t("set_missing_db") : t("not_saved"); }
     });
+    bindBackup();
     if ($("kGen")) $("kGen").addEventListener("click", async function () {
       var b = $("kGen");
       if (S.push && S.push.publicKey && !b.dataset.armed) { b.dataset.armed = "1"; b.textContent = t("keys_regen_confirm"); b.classList.add("danger-btn"); return; }
       b.disabled = true;
       try { await generateKeys(); } catch (e) { if (noDb(e) && $("kSt")) $("kSt").textContent = t("set_missing_db"); toast(noDb(e) ? t("set_missing_db") : t("error_generic")); b.disabled = false; }
+    });
+  }
+
+  function bindBackup() {
+    if (!$("bkSend")) return;
+    var file = null;
+    $("bkSend").addEventListener("click", async function () {
+      var b = $("bkSend"); b.disabled = true; b.textContent = t("bk_sending");
+      try {
+        var r = await o.api.sendBackupNow();
+        toast(t(r && r.demo ? "bk_demo" : "bk_sent"));
+        try { S.backup = await o.api.getBackupStatus(); } catch (e) { /* ostaje staro */ }
+        if ($("bkSt")) $("bkSt").outerHTML = bkStatus();
+      } catch (e) {
+        var k = { no_function: "bk_err_nofn", jwt_on: "bk_err_jwt", forbidden: "bk_err_forbidden", rate: "bk_err_rate", missing_password: "bk_why_password", missing_resend: "bk_why_resend", mail_failed: "bk_why_mail", read_failed: "bk_why_read" }[e.code];
+        var msg = k ? t(k) : t("error_generic");
+        if ($("bkSt")) { $("bkSt").className = "small form-err"; $("bkSt").textContent = msg; }
+        toast(msg);
+      }
+      if ($("bkSend")) { $("bkSend").disabled = false; $("bkSend").textContent = t("bk_send"); }
+    });
+    $("bkFile").addEventListener("change", function () {
+      file = $("bkFile").files[0] || null; $("bkFile").value = "";
+      $("bkName").textContent = file ? file.name : ""; $("bkOut").innerHTML = "";
+      if (file) $("bkPw").focus();
+    });
+    $("bkOpen").addEventListener("click", async function () {
+      var out = $("bkOut"), b = $("bkOpen");
+      if (!file) { out.innerHTML = '<p class="small form-err">' + esc(t("bk_pick_file")) + "</p>"; return; }
+      b.disabled = true; out.innerHTML = '<p class="small muted">' + esc(t("bk_opening")) + "</p>";
+      var data = null, code = null;
+      try {
+        var txt = await file.text(), x = null;
+        try { x = JSON.parse(txt.replace(/^\uFEFF/, "")); } catch (e) { throw Object.assign(new Error("bad_file"), { code: "bad_file" }); }
+        if (isPlainBackup(x)) data = x;
+        else if (isEncryptedBackup(x)) data = await decryptBackup(x, $("bkPw").value);
+        else code = "bad_file";
+      } catch (e) { code = e.code || "bad_file"; }
+      b.disabled = false;
+      if (!data) { out.innerHTML = '<p class="small form-err">' + esc(t({ bad_password: "bk_bad_pw", unsupported: "bk_unsupported" }[code] || "bk_bad_file")) + "</p>"; return; }
+      var sm = backupSummary(data), day = String(sm.at || "").slice(0, 10) || today();
+      out.innerHTML = '<div class="hint ok" id="bkSummary">' + esc(t("bk_opened", { when: sm.at ? bkWhen(sm.at) : "—", c: sm.clients, i: sm.intakes, p: sm.plans, d: sm.daily, s: sm.sessions })) + "</div>" +
+        '<p class="small muted">' + esc(t("bk_dl_warn")) + '</p><div class="actions"><button type="button" class="btn ghost small" id="bkDl">' + esc(t("bk_download")) + "</button></div>";
+      $("bkPw").value = "";
+      $("bkDl").addEventListener("click", function () { downloadText("rekomp-rezervna-kopija-" + day + ".json", JSON.stringify(data, null, 1), "application/json"); });
     });
   }
 
@@ -343,9 +410,10 @@ export function renderSettings(el, o) {
   Promise.all([
     o.api.getAppSetting("contact").catch(function (e) { if (noDb(e)) S.dbMissing = true; return null; }),
     o.api.getAppSetting("push").catch(function (e) { if (noDb(e)) S.dbMissing = true; return null; }),
-    currentSub()
+    currentSub(),
+    o.role === "admin" && o.api.getBackupStatus ? o.api.getBackupStatus().catch(function () { return null; }) : null
   ]).then(function (r) {
-    S.contact = r[0]; S.push = r[1] || {}; S.sub = r[2];
+    S.contact = r[0]; S.push = r[1] || {}; S.sub = r[2]; S.backup = r[3] || null;
     if (el.isConnected) draw();
   });
   return { redraw: draw };

@@ -1,6 +1,6 @@
 // Pokretanje aplikacije: prijava, upitnik, klijentska strana i trenerski panel.
 import { $, esc, toast } from "./util.js";
-import { t, setLang, detectLang, getLang, langSelectHtml, chosenLang } from "./i18n.js";
+import { t, setLang, detectLang, getLang, langSelectHtml, chosenLang, legalLink, tLinks } from "./i18n.js";
 import { createApi } from "./api.js";
 import { mountIntake } from "./intake-ui.js";
 import { mountClient, brandHtml } from "./client.js";
@@ -71,11 +71,13 @@ function renderAuth(mode) {
     '<div class="field"><label for="aPw">' + esc(t("password")) + '</label><input id="aPw" type="password" autocomplete="' + (mode === "login" ? "current-password" : "new-password") + '" required minlength="8">' + (mode === "signup" ? '<p class="q-help">' + esc(t("password_hint")) + "</p>" : "") + "</div>" +
     (mode === "signup" ? '<div class="field"><label for="aCode">' + esc(t("invite_code")) + '</label><input id="aCode" autocapitalize="characters" autocomplete="off" spellcheck="false"><p class="q-help">' + esc(t("invite_code_hint")) + "</p></div>" : "") +
     '<p id="authErr" class="form-err" role="alert" hidden></p>' +
+    (mode === "signup" ? '<p class="small muted" id="signupLegal">' + tLinks("signup_legal", { terms: "legal_terms_acc", privacy: "legal_privacy_acc" }) + "</p>" : "") +
     '<div class="actions"><button type="submit" class="btn" id="authBtn">' + esc(mode === "login" ? t("login_btn") : t("signup_btn")) + "</button></div>" +
     (mode === "login" ? '<details class="small"' + (state.linkErr ? " open" : "") + '><summary class="muted">' + esc(t("forgot")) + "</summary>" +
       (emailReset() ? '<p class="small">' + esc(t("forgot_text_email")) + '</p><div class="actions"><button type="button" class="btn ghost small" id="aForgot">' + esc(t("forgot_send")) + '</button></div><p id="forgotMsg" class="small" role="status" hidden></p>'
         : '<p class="small">' + esc(t("forgot_text")) + "</p>") + "</details>" : "") +
-    "</form></div></main>";
+    "</form></div>" +
+    '<p class="small muted auth-legal" id="authLegal">' + legalLink("about") + " · " + legalLink("privacy") + " · " + legalLink("terms") + "</p></main>";
   bindDemoBar();
   if (state.linkErr && mode === "login") { var le = $("authErr"); le.textContent = t("link_expired"); le.hidden = false; state.linkErr = false; cleanHash(); }
   if ($("aForgot")) $("aForgot").addEventListener("click", async function () {

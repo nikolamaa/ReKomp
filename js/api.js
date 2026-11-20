@@ -162,6 +162,27 @@ function supaApi(cfg) {
       return unwrap(await sb.from("plans").upsert({ client_id: cid, data: data, published: !!published }).select().single());
     },
     async markSeen(cid) { unwrap(await sb.from("intakes").update({ seen_by_trainer_at: new Date().toISOString() }).eq("client_id", cid)); },
+    // istorija plana (plan_versions.sql): prethodne verzije, najnovija prva
+    async listPlanVersions(cid) {
+      return unwrap(await sb.from("plan_versions").select("id,published,saved_at,plan_updated_at").eq("client_id", cid).order("id", { ascending: false }).limit(50));
+    },
+    async getPlanVersion(id) { return unwrap(await sb.from("plan_versions").select("id,client_id,data,published,saved_at,plan_updated_at").eq("id", id).maybeSingle()); },
+    // rezervna kopija na mejl (funkcija weekly-backup)
+    async getBackupStatus() { var d = unwrap(await sb.from("trainer_files").select("data").eq("key", "status:backup").maybeSingle()); return d ? d.data : null; },
+    async sendBackupNow() {
+      var s = (await sb.auth.getSession()).data.session; if (!s) throw err("auth");
+      var r;
+      try {
+        r = await fetch(cfg.supabaseUrl.replace(/\/$/, "") + "/functions/v1/weekly-backup", { method: "POST", headers: { "Content-Type": "application/json", apikey: cfg.supabaseAnonKey, Authorization: "Bearer " + s.access_token }, body: "{}" });
+      } catch (e) { throw err("network"); }
+      var body = null; try { body = await r.json(); } catch (e) { body = null; }
+      if (r.ok && body && body.ok) return body;
+      if (r.status === 404) throw err("no_function");
+      if (r.status === 401) throw err("jwt_on");
+      if (r.status === 403) throw err("forbidden");
+      if (r.status === 429) throw err("rate");
+      throw err((body && body.error) || "server", body && body.detail);
+    },
 
     // pregled napretka i rezervna kopija (samo trener, RLS)
     async listPlans() { return unwrap(await sb.from("plans").select("client_id,data,published")); },
@@ -177,8 +198,8 @@ function supaApi(cfg) {
     },
     async exportAll() {
       var T = { admins: ["user_id"], clients: ["id"], client_private: ["client_id"], client_members: ["user_id"], intakes: ["client_id"], plans: ["client_id"], daily_logs: ["client_id", "day"], sessions: ["client_id", "day", "workout"], week_plans: ["client_id", "week"] };
-      T.trainer_files = ["key"]; T.app_settings = ["key"];
-      var OPTIONAL = ["week_plans", "trainer_files", "app_settings"], out = {};
+      T.trainer_files = ["key"]; T.app_settings = ["key"]; T.plan_versions = ["id"];
+      var OPTIONAL = ["week_plans", "trainer_files", "app_settings", "plan_versions"], out = {};
       for (var name in T) {
         try { out[name] = await fetchAll(function () { var q = sb.from(name).select("*"); T[name].forEach(function (c) { q = q.order(c); }); return q; }); }
         catch (e) { if (OPTIONAL.indexOf(name) >= 0) out[name] = null; else throw e; }   // tabela možda još nije napravljena
@@ -217,6 +238,7 @@ function demoApi() {
   }
   function guardAdmin(s) { var u = me(s); if (!u || !isAdmin(s, u.id)) throw err("forbidden"); }
   function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
+  function withoutNotes(d) { var c = Object.assign({}, d || {}); delete c.notes; return c; }
   var listeners = [];
   function emit(ev) { listeners.forEach(function (cb) { cb(ev); }); }
 
@@ -333,7 +355,7 @@ function demoApi() {
       var s = load(); guardAdmin(s);
       s.clients = s.clients.filter(function (x) { return x.id !== id; });
       s.members = s.members.filter(function (m) { return m.client_id !== id; });
-      delete s.intakes[id]; delete s.plans[id]; delete s.daily[id]; delete s.sessions[id]; delete s.private[id]; if (s.weeks) delete s.weeks[id];
+      delete s.intakes[id]; delete s.plans[id]; delete s.daily[id]; delete s.sessions[id]; delete s.private[id]; if (s.weeks) delete s.weeks[id]; if (s.planVersions) delete s.planVersions[id];
       store(s);
     },
     async newInviteCode(id) { return this.updateClient(id, { invite_code: randomCode(8) }); },
@@ -343,7 +365,29 @@ function demoApi() {
     async savePrivate(cid, note) { var s = load(); guardAdmin(s); s.private[cid] = note; store(s); },
     async savePlan(cid, data, published) {
       var s = load(); guardAdmin(s);
+      var old = s.plans[cid];
+      // kao okidač u plan_versions.sql: prethodna verzija se čuva kad se promeni plan (poruke se ne računaju)
+      if (old && JSON.stringify(withoutNotes(old.data)) !== JSON.stringify(withoutNotes(data))) {
+        s.planVersions = s.planVersions || {}; s.nextVersion = (s.nextVersion || 0) + 1;
+        var list = (s.planVersions[cid] || []).concat([{ id: s.nextVersion, client_id: cid, data: clone(old.data), published: !!old.published, saved_at: nowIso(), plan_updated_at: old.updated_at || null }]);
+        s.planVersions[cid] = list.slice(-50);
+      }
       s.plans[cid] = { client_id: cid, data: clone(data), published: !!published, updated_at: nowIso() }; store(s); return clone(s.plans[cid]);
+    },
+    async listPlanVersions(cid) {
+      var s = load(); guardAdmin(s);
+      return ((s.planVersions || {})[cid] || []).slice().reverse().map(function (v) { return { id: v.id, published: v.published, saved_at: v.saved_at, plan_updated_at: v.plan_updated_at }; });
+    },
+    async getPlanVersion(id) {
+      var s = load(), hit = null; guardAdmin(s);
+      Object.keys(s.planVersions || {}).forEach(function (cid) { s.planVersions[cid].forEach(function (v) { if (v.id === Number(id)) hit = v; }); });
+      return clone(hit);
+    },
+    async getBackupStatus() { var s = load(); guardAdmin(s); return clone(s.backupStatus || null); },
+    async sendBackupNow() {
+      var s = load(); guardAdmin(s);
+      s.backupStatus = { at: nowIso(), ok: true, source: "manual", bytes: 0, demo: true }; store(s);
+      return { ok: true, demo: true };
     },
     async markSeen(cid) { var s = load(); guardAdmin(s); if (s.intakes[cid]) { s.intakes[cid].seen_by_trainer_at = nowIso(); store(s); } },
     async listPlans() { var s = load(); guardAdmin(s); return Object.keys(s.plans).map(function (k) { var p = s.plans[k]; return { client_id: k, data: clone(p.data), published: p.published }; }); },

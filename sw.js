@@ -1,11 +1,12 @@
 // Service worker: aplikacija se otvara i bez interneta; izmene stižu čim ima veze.
-var VERSION = "rekomp-v29";
+var VERSION = "rekomp-v30";
 var SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./manifest.webmanifest", "./vendor/supabase.js",
   "./js/app.js", "./js/api.js", "./js/util.js", "./js/i18n.js", "./js/intake.js", "./js/intake-ui.js",
   "./js/client.js", "./js/admin.js", "./js/plan-format.js", "./js/demo-data.js", "./js/insights.js",
-  "./js/theme.js", "./js/settings.js",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/favicon.svg", "./icons/badge-96.png"
+  "./js/theme.js", "./js/settings.js", "./js/backup-crypto.js",
+  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/favicon.svg", "./icons/badge-96.png",
+  "./privatnost/", "./uslovi/", "./site/site.css", "./site/site.js"
 ];
 
 self.addEventListener("install", function (e) {

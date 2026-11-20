@@ -151,6 +151,8 @@ details > summary::-webkit-details-marker { display: none; }
 .auth { display: flex; flex-direction: column; gap: 16px; padding-top: 28px; max-width: 460px; }
 .auth-head { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .auth form { display: flex; flex-direction: column; gap: 12px; }
+.auth-legal { text-align: center; margin: 0; }
+.auth-legal a, .set-legal a, #signupLegal a, #iqLegal a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 /* intake */
 .intake-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -293,6 +295,12 @@ td.n, th.n { text-align: right; white-space: nowrap; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .list li { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .list li:first-child { border-top: 0; }
+/* Istorija plana: detalji verzije ispod reda, preko cele širine */
+.ph-list li { flex-wrap: wrap; }
+.ph-list li > span { flex: 1 1 12rem; min-width: 0; }
+.ph-out { flex: 1 1 100%; min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--raised); }
+.ph-out p { margin: 0 0 8px; }
+.ph-out .actions { margin-top: 4px; }
 .chart svg { display: block; width: 100%; height: auto; }
 .chart text { fill: var(--muted); font-size: 11px; font-family: var(--font-body); }
 .targets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

@@ -1,8 +1,8 @@
 // Trenerski panel: klijenti, upitnik, sekcije, plan, unosi, pristup.
-import { $, qsa, esc, parseYmd, addDays, monday, num, f1, nowHM, copyText, toast, today, downloadText, GEAR } from "./util.js";
+import { $, qsa, esc, parseYmd, addDays, monday, num, f1, nowHM, copyText, toast, today, downloadText, GEAR, pad } from "./util.js";
 import { t, tIn, getLang, fmtShortDate, fmtRange, inviteText, langSelectHtml, LANGS } from "./i18n.js";
 import { SECTIONS, tx, fieldVisible, displayValue, isFlagged, parqPositive, sectionAnswered, defaultSections } from "./intake.js";
-import { validatePlan, claudePrompt, initials, extractPlanJson } from "./plan-format.js";
+import { validatePlan, claudePrompt, initials, extractPlanJson, planDiff } from "./plan-format.js";
 import { brandHtml } from "./client.js";
 import { computeInsights } from "./insights.js";
 import { renderSettings } from "./settings.js";
@@ -379,6 +379,7 @@ export function mountAdmin(root, ctx) {
       '<div id="pCheck" role="status"></div>' +
       '<div class="actions"><button type="button" class="btn ghost small" id="pVal">' + esc(t("validate")) + '</button><button type="button" class="btn ghost small" id="pDraft">' + esc(pub ? t("save_changes") : t("save_draft")) + "</button>" +
       '<button type="button" class="btn small" id="pPub">' + esc(pub ? t("unpublish") : t("publish")) + '</button><button type="button" class="btn ghost small" id="pPrev">' + esc(t("preview")) + '</button><button type="button" class="btn ghost small" id="pCopy">' + esc(t("copy")) + "</button></div></div>" +
+      '<div class="card" id="phCard"><h3>' + esc(t("ph_title")) + '</h3><p class="small muted">' + esc(t("ph_hint")) + '</p><div id="phList"><p class="small muted">' + esc(t("loading")) + "</p></div></div>" +
       '<div class="card"><h3>' + esc(t("messages")) + '</h3><div id="pNotes" class="notes"></div><div class="field"><label for="pMsg">' + esc(t("add_message")) + '</label><textarea id="pMsg" rows="2"></textarea></div><div class="actions"><button type="button" class="btn small" id="pAddMsg">' + esc(t("add")) + "</button></div></div>";
     function drawNotes() {
       var notes = (D.plan && D.plan.data && D.plan.data.notes) || [];
@@ -448,6 +449,43 @@ export function mountAdmin(root, ctx) {
       } catch (e) { toast(t("not_saved")); }
     });
     drawNotes();
+    drawHistory();
+
+    // Istorija plana: prethodne verzije (plan_versions.sql); „Učitaj u polje“ pa Proveri → Sačuvaj izmene vraća verziju.
+    function when(iso) { var d = new Date(iso); return isNaN(d) ? "—" : fmtShortDate(d) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+    async function drawHistory() {
+      var box = $("phList"); if (!box) return;
+      var list;
+      try { list = await ctx.api.listPlanVersions(D.id); }
+      catch (e) { if ($("phList")) $("phList").innerHTML = '<p class="small muted">' + esc(t(/PGRST205|42P01|schema cache|does not exist|could not find/i.test(String(e.code) + " " + String(e.message)) ? "ph_missing_db" : "error_generic")) + "</p>"; return; }
+      if (!$("phList")) return;
+      $("phList").innerHTML = list && list.length ? '<ul class="list ph-list">' + list.map(function (v) {
+        return '<li data-phid="' + esc(v.id) + '"><span><b>' + esc(t("ph_version", { x: when(v.plan_updated_at || v.saved_at) })) + '</b><br><span class="small muted">' + esc((v.published ? t("ph_was_pub") : t("ph_was_draft")) + " · " + t("ph_replaced", { x: when(v.saved_at) })) + '</span></span><button type="button" class="btn ghost small" data-phv="' + esc(v.id) + '">' + esc(t("ph_view")) + '</button><div class="ph-out" hidden></div></li>';
+      }).join("") + "</ul>" : '<p class="small muted">' + esc(t("ph_none")) + "</p>";
+      qsa("[data-phv]", $("phList")).forEach(function (b) {
+        b.addEventListener("click", async function () {
+          var li = b.closest("li"), out = li.querySelector(".ph-out");
+          if (!out.hidden) { out.hidden = true; b.textContent = t("ph_view"); return; }
+          b.disabled = true;
+          var v = null; try { v = await ctx.api.getPlanVersion(b.dataset.phv); } catch (e) { v = null; }
+          b.disabled = false;
+          if (!v || !v.data) { toast(t("error_generic")); return; }
+          var cur = (D.plan && D.plan.data) || {}, diff = planDiff(v.data, cur);
+          var then = validatePlan(v.data, {}).summary, now = validatePlan(cur, {}).summary;
+          out.innerHTML = '<p class="small"><b>' + esc(t("ph_this")) + "</b> " + esc(then) + '<br><b>' + esc(t("ph_now")) + "</b> " + esc(now) + "</p>" +
+            '<p class="small">' + esc(diff.length ? t("ph_diff", { x: diff.map(function (k) { return t(k); }).join(", ") }) : t("ph_same")) + "</p>" +
+            '<div class="actions"><button type="button" class="btn small" data-phload>' + esc(t("ph_load")) + '</button><button type="button" class="btn ghost small" data-phcopy>' + esc(t("copy")) + "</button></div>";
+          out.hidden = false; b.textContent = t("ph_hide");
+          out.querySelector("[data-phload]").addEventListener("click", function () {
+            $("pJson").value = JSON.stringify(v.data, null, 2);
+            check();
+            toast(t("ph_loaded"));
+            $("pJson").scrollIntoView({ behavior: "smooth", block: "center" });
+          });
+          out.querySelector("[data-phcopy]").addEventListener("click", async function () { toast((await copyText(JSON.stringify(v.data, null, 2))) ? t("copied") : t("error_generic")); });
+        });
+      });
+    }
   }
 
   /* Unosi */
