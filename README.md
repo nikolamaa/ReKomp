@@ -111,7 +111,7 @@ Klijent u **Podešavanjima** bira šta mu stiže (dobro jutro i vaga, obrok pred
 
 Jednom (oko 15 minuta):
 
-1. **SQL Editor:** pokreni `supabase/notifications.sql`.
+1. **SQL Editor:** pokreni `supabase/notifications.sql`. Tek posle toga mogu da se sačuvaju **Kontakt koji vide klijenti** i ključevi u Podešavanjima (pre toga aplikacija javlja da prvo treba pokrenuti ovaj SQL).
 2. **Edge Functions → Deploy a new function → Via Editor:** ime `send-reminders`, nalepi ceo `supabase/functions/send-reminders/index.ts`, **Deploy**. U podešavanjima funkcije isključi **Verify JWT** (funkcija sama proverava šifru).
 3. **U aplikaciji:** zupčanik → **Ključevi za notifikacije** → **Napravi ključeve**. Ključeve pravi tvoj pregledač; tajni ključ se prikazuje samo tada.
 4. **Edge Functions → Secrets:** nalepi 4 reda iz aplikacije (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`) → **Save**.

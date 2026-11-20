@@ -65,6 +65,8 @@ export async function ensurePush(api, settings) {
 }
 
 /* ---------- pomoćno ---------- */
+// Tabela ili funkcija ne postoji u bazi (notifications.sql još nije pokrenut).
+function noDb(e) { var c = e && e.code, m = String((e && e.message) || ""); return c === "PGRST205" || c === "PGRST202" || c === "42P01" || c === "42883" || /schema cache|does not exist|could not find the (table|function)/i.test(m); }
 function card(title, body, id) { return '<div class="card set-card"' + (id ? ' id="' + id + '"' : "") + "><h3>" + esc(title) + "</h3>" + body + "</div>"; }
 function toggleRow(id, label, hint, checked, attr) {
   return '<label class="toggle"><input type="checkbox" id="' + id + '"' + (attr || "") + (checked ? " checked" : "") + '><span class="tg-l"><b>' + esc(label) + "</b>" + (hint ? "<small>" + esc(hint) + "</small>" : "") + '</span><span class="sw" aria-hidden="true"></span></label>';
@@ -198,7 +200,8 @@ export function renderSettings(el, o) {
     prefs = notifPrefs(S.data, kinds);
     el.classList.add("view");   // kartice jedna ispod druge sa razmakom, bez obzira gde se crta (klijent ili trener)
     var name = o.role === "client" && o.client ? '<p class="muted">' + esc(o.client.name) + "</p>" : "";
-    el.innerHTML = '<div class="card">' + (o.back || "") + "<h2>" + esc(t("settings")) + "</h2>" + name + "</div>" +
+    var dbWarn = o.role === "admin" && S.dbMissing ? '<p class="form-err small" id="setDbMissing">' + esc(t("set_missing_db")) + "</p>" : "";
+    el.innerHTML = '<div class="card">' + (o.back || "") + "<h2>" + esc(t("settings")) + "</h2>" + name + dbWarn + "</div>" +
       notifCard() + (o.role === "admin" ? keysCard() + contactForm() : contactCard()) + themeCard() + langCard() + accountCard() + aboutCard();
     bind();
   }
@@ -275,13 +278,13 @@ export function renderSettings(el, o) {
       if (c.phone && digits(c.phone).replace(/\D/g, "").length < 8) { $("ctErr").textContent = t("phone_bad"); $("ctErr").hidden = false; return; }
       $("ctErr").hidden = true;
       try { await o.api.saveAppSetting("contact", c); S.contact = c; $("ctSt").textContent = t("saved_at", { time: pad(new Date().getHours()) + ":" + pad(new Date().getMinutes()) }); }
-      catch (err) { $("ctSt").textContent = t("not_saved"); }
+      catch (err) { $("ctSt").textContent = noDb(err) ? t("set_missing_db") : t("not_saved"); }
     });
     if ($("kGen")) $("kGen").addEventListener("click", async function () {
       var b = $("kGen");
       if (S.push && S.push.publicKey && !b.dataset.armed) { b.dataset.armed = "1"; b.textContent = t("keys_regen_confirm"); b.classList.add("danger-btn"); return; }
       b.disabled = true;
-      try { await generateKeys(); } catch (e) { toast(t("error_generic")); b.disabled = false; }
+      try { await generateKeys(); } catch (e) { if (noDb(e) && $("kSt")) $("kSt").textContent = t("set_missing_db"); toast(noDb(e) ? t("set_missing_db") : t("error_generic")); b.disabled = false; }
     });
   }
 
@@ -322,8 +325,8 @@ export function renderSettings(el, o) {
   draw();
   // učitaj kontakt, javni ključ i stanje telefona, pa osveži
   Promise.all([
-    o.api.getAppSetting("contact").catch(function () { return null; }),
-    o.api.getAppSetting("push").catch(function () { return null; }),
+    o.api.getAppSetting("contact").catch(function (e) { if (noDb(e)) S.dbMissing = true; return null; }),
+    o.api.getAppSetting("push").catch(function (e) { if (noDb(e)) S.dbMissing = true; return null; }),
     currentSub()
   ]).then(function (r) {
     S.contact = r[0]; S.push = r[1] || {}; S.sub = r[2];
