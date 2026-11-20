@@ -20,5 +20,9 @@ select cron.schedule('rekomp-reminders', '* * * * *', $job$
     timeout_milliseconds := 25000);
 $job$);
 
+-- Čišćenje istorije: cron upisuje red svakog minuta (oko 1.440 dnevno), pa se jednom dnevno brišu redovi starije od 7 dana.
+select cron.unschedule('rekomp-cron-cleanup') where exists (select 1 from cron.job where jobname = 'rekomp-cron-cleanup');
+select cron.schedule('rekomp-cron-cleanup', '17 3 * * *', $c$ delete from cron.job_run_details where end_time < now() - interval '7 days' $c$);
+
 -- Provera: select * from cron.job_run_details order by start_time desc limit 5;
 --          select status_code, content from net._http_response order by created desc limit 5;
