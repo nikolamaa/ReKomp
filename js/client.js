@@ -187,7 +187,7 @@ export function mountClient(root, ctx) {
     '<header class="top' + (LVON ? " has-lvl" : "") + '"><div class="wrap"><div class="brand">' + brandHtml(ctx.appName) + '</div><div class="top-r"><span id="hdrDate" class="hdr-date"></span>' +
     (showPlan ? '<button type="button" class="icon-btn" id="cPlanBtn" aria-label="' + esc(t("plan_btn")) + '">' + ICON.plan + "<span>" + esc(t("plan_btn")) + "</span></button>" : "") +
     (ctx.extraHeaderBtn || "") +
-    (LVON ? '<button type="button" class="lvl-pill" id="cLvlPill" aria-label="' + esc(t("lv_open")) + '" hidden><span class="mini" id="cLvlMini"></span><span id="cLvlN">' + esc(t("lv_lvl")) + "</span></button>" : "") +
+    (LVON ? '<button type="button" class="icon-btn lvl-pill" id="cLvlPill" aria-label="' + esc(t("lv_open")) + '" hidden><span class="mini" id="cLvlMini"></span><span id="cLvlN">' + esc(t("lv_lvl")) + "</span></button>" : "") +
     '<button type="button" class="icon-btn round" id="cSettingsBtn" aria-label="' + esc(t("settings")) + '" title="' + esc(t("settings")) + '">' + ICON.settings + "</button></div></div></header>" +
     '<main class="wrap" id="cMain">' +
     '<section id="v-danas" class="view">' +

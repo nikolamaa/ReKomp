@@ -446,9 +446,10 @@ input[type="search"] { border-radius: 999px; }
 .ok-text { color: var(--ok); }
 a.icon-btn { text-decoration: none; }
 /* Nivo i XP (levels.js): koral prsten = napredak do sledećeg nivoa, zlatno = XP */
-.lvl-pill { display: inline-flex; align-items: center; gap: 5px; background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px 5px 6px; font: 700 0.95rem var(--font-display); cursor: pointer; white-space: nowrap; }
-.lvl-pill .mini { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--line) 0); }
-.lvl-pill .mini::after { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--raised); }
+/* Lvl u zaglavlju je isto dugme kao Plan (.icon-btn); umesto ikonice mali prsten iste veličine (18 px) */
+.icon-btn.lvl-pill { padding-left: 8px; font-variant-numeric: tabular-nums; }
+.lvl-pill .mini { width: 18px; height: 18px; flex: none; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--line) 0); }
+.lvl-pill .mini::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--raised); }
 .lvl-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
 .lvl-card { cursor: pointer; }
 .lvl-card .lvl-top { grid-template-columns: auto minmax(0, 1fr) auto; }
