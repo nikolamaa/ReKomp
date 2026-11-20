@@ -313,10 +313,26 @@ export function renderSettings(el, o) {
       "select cron.schedule('rekomp-reminders', '* * * * *', $job$\n  select net.http_post(\n    url := '" + url + "',\n" +
       "    headers := jsonb_build_object('Content-Type', 'application/json',\n      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'rekomp_cron_secret')),\n" +
       "    body := '{}'::jsonb,\n    timeout_milliseconds := 25000);\n$job$);";
+    var pairs = [["VAPID_PUBLIC_KEY", pub], ["VAPID_PRIVATE_KEY", priv], ["VAPID_SUBJECT", subject], ["CRON_SECRET", cron]];
+    // Na telefonu Supabase ne razdvaja nalepljena 4 reda, pa svaki red ima svoje dugme za ime i za vrednost.
     $("kOut").innerHTML = '<p class="hint warn">' + esc(t("keys_once")) + "</p>" +
-      '<span class="label">1. ' + esc(t("keys_step_secrets")) + '</span><pre class="set-code" id="kSecrets">' + esc(secrets) + '</pre><div class="actions"><button type="button" class="btn small" data-kcopy="kSecrets">' + esc(t("copy")) + "</button></div>" +
+      '<span class="label">1. ' + esc(t("keys_step_secrets")) + '</span><p class="small muted">' + esc(t("keys_one_by_one")) + "</p>" +
+      '<ul class="set-secrets" id="kPairs">' + pairs.map(function (p, i) {
+        return '<li><code>' + esc(p[0]) + '</code><div class="actions"><button type="button" class="btn ghost small" data-kv="' + i + '" data-part="n">' + esc(t("keys_copy_name")) + '</button><button type="button" class="btn small" data-kv="' + i + '" data-part="v">' + esc(t("keys_copy_value")) + "</button></div></li>";
+      }).join("") + "</ul>" +
+      '<details class="set-details" id="kAll"><summary>' + esc(t("keys_all_at_once")) + '</summary><pre class="set-code" id="kSecrets">' + esc(secrets) + '</pre><div class="actions"><button type="button" class="btn small" data-kcopy="kSecrets">' + esc(t("copy")) + "</button></div></details>" +
       '<span class="label">2. ' + esc(t("keys_step_sql")) + '</span><pre class="set-code" id="kSql">' + esc(sql) + '</pre><div class="actions"><button type="button" class="btn small" data-kcopy="kSql">' + esc(t("copy")) + "</button></div>" +
       '<p class="small muted">' + esc(t("keys_after")) + "</p>";
+    qsa("[data-kv]", el).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var p = pairs[+b.dataset.kv], val = b.dataset.part === "v";
+        copyText(val ? p[1] : p[0]).then(function (okk) {
+          if (!okk) { toast(t("copy_failed")); return; }
+          toast(t(val ? "keys_copied_value" : "keys_copied_name", { n: p[0] }));
+          if (val) b.closest("li").classList.add("done");
+        });
+      });
+    });
     qsa("[data-kcopy]", el).forEach(function (b) { b.addEventListener("click", function () { copyText($(b.dataset.kcopy).textContent).then(function (okk) { toast(okk ? t("copied") : t("copy_failed")); }); }); });
     $("kSt").textContent = t("keys_have", { d: push.createdAt.slice(0, 10) });
     var g = $("kGen"); g.textContent = t("keys_regen"); g.classList.remove("danger-btn"); delete g.dataset.armed; g.disabled = false;
