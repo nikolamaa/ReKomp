@@ -18,6 +18,7 @@
   --ok: #5EC08A;
   --warn: #E5AB4E;
   --accent: #F27F70;
+  --xp: #F2C14E;
   --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --r: 14px;
@@ -46,6 +47,7 @@
   --accent: #D0533F;
   --shadow: rgba(22, 32, 42, 0.18);
   --c0: #D0533F; --c1: #2E6FD0; --c2: #1F8A55; --c3: #B07A0A; --c4: #6F55D6; --c5: #C0407F; --c6: #14868E; --c7: #7C8A16; --c8: #C2671C; --c9: #53677D;
+  --xp: #9A6A00;
 }
 /* iPhone sa aplikacijom na početnom ekranu: sat i baterija su beli, pa traka iznad zaglavlja ostaje tamna */
 @media (display-mode: standalone) { :root[data-theme="light"] body::before { background: #141D26; } }
@@ -443,3 +445,52 @@ input[type="search"] { border-radius: 999px; }
 .set-code { background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 0.78rem; line-height: 1.4; overflow-x: auto; white-space: pre; margin: 6px 0 0; max-width: 100%; }
 .ok-text { color: var(--ok); }
 a.icon-btn { text-decoration: none; }
+/* Nivo i XP (levels.js): koral prsten = napredak do sledećeg nivoa, zlatno = XP */
+.lvl-pill { display: inline-flex; align-items: center; gap: 5px; background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px 5px 6px; font: 700 0.95rem var(--font-display); cursor: pointer; white-space: nowrap; }
+.lvl-pill .mini { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--line) 0); }
+.lvl-pill .mini::after { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--raised); }
+.lvl-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.lvl-card { cursor: pointer; }
+.lvl-card .lvl-top { grid-template-columns: auto minmax(0, 1fr) auto; }
+.lvl-chev { color: var(--faint); font-size: 1.6rem; line-height: 1; }
+.lvl-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.lvl-card:active { background: var(--raised); }
+.lvl-ring { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--line) 0); flex: none; }
+.lvl-ring span { width: 58px; height: 58px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; font: 700 1.9rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.lvl-ring.big { width: 112px; height: 112px; }
+.lvl-ring.big span { width: 92px; height: 92px; font-size: 3rem; }
+.lvl-meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lvl-tier { font: 700 1.5rem/1.05 var(--font-display); }
+.lvl-bar { height: 10px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); overflow: hidden; }
+.lvl-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--xp)); border-radius: 999px; }
+.xp-text { color: var(--xp); }
+.pill.xp { color: var(--xp); }
+.lvl-todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lvl-todo li { display: flex; justify-content: space-between; gap: 10px; font-size: 0.95rem; }
+.lvl-todo li b { color: var(--xp); font-family: var(--font-display); font-weight: 600; white-space: nowrap; }
+.lvl-pr { text-align: right; }
+.badges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.bdg { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--raised); min-width: 0; }
+.bdg b { font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; }
+.bdg.off { background: transparent; color: var(--faint); }
+.bdg.off b { color: var(--muted); }
+.bdg.on { border-color: color-mix(in srgb, var(--xp) 60%, var(--line)); }
+.bdg.on b { color: var(--xp); }
+.xp-chart svg { display: block; width: 100%; height: auto; }
+.xp-chart text { fill: var(--muted); font-size: 10px; font-family: var(--font-body); }
+.xp-chart .xb { fill: var(--accent); fill-opacity: 0.75; }
+.xp-chart .xb-today { fill: var(--xp); }
+.lvl-rules td.n, .lvl-rules th.n { text-align: right; }
+.lvl-rules td.n { min-width: 5.5em; }
+#xpToast { position: fixed; left: 50%; bottom: calc(110px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); z-index: 21; background: var(--raised); color: var(--ink); border: 1px solid color-mix(in srgb, var(--xp) 55%, var(--line)); border-radius: 999px; padding: 10px 16px; font-weight: 600; box-shadow: 0 10px 24px var(--shadow); opacity: 0; pointer-events: none; max-width: calc(100vw - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#xpToast b { color: var(--xp); font-family: var(--font-display); font-size: 1.15rem; }
+#xpToast.show { opacity: 1; transform: translate(-50%, 0); }
+.no-tabs #xpToast { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+@media (prefers-reduced-motion: no-preference) { #xpToast { transition: opacity .2s, transform .2s; } .lvl-bar span { transition: width .4s; } }
+.lvlup { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px; background: rgba(5, 8, 11, 0.72); }
+.lvlup .box { width: min(340px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 26px 20px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.lvlup .box .label { color: var(--xp); }
+@media (prefers-reduced-motion: no-preference) { .lvlup .lvl-ring { animation: lvpop .5s ease-out; } @keyframes lvpop { 0% { transform: scale(.6); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } } }
+@media (max-width: 480px) { .top.has-lvl .hdr-date { display: none; } }
+@media (max-width: 360px) { .badges { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 360px) { .top.has-lvl #cPlanBtn { padding: 6px; } .top.has-lvl #cPlanBtn span { display: none; } }

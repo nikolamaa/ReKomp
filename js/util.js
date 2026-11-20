@@ -94,7 +94,7 @@ export function isStandalone() {
 export function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
 
 // Verzija aplikacije (ista kao VERSION u sw.js).
-export var APP_VERSION = "30";
+export var APP_VERSION = "31";
 
 // Fajl za preuzimanje; u iPhone aplikaciji sa početnog ekrana deljenje (tamo preuzimanje ne radi pouzdano).
 export function downloadText(name, text, mime) {

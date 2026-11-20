@@ -3,6 +3,7 @@
 import { $, qsa, esc, ymd, parseYmd, addDays, monday, weekdayKey, num, badNum, f1, fnum, hm, fmtMin, nowHM, lsGet, lsSet, lsDel, isStandalone, isIOS, toast, GEAR } from "./util.js";
 import { renderSettings, CLIENT_KINDS, notifPrefs, ensurePush } from "./settings.js";
 import { t, getLang, fmtShortDate, fmtLongDate, fmtRange, dayLong, langSelectHtml } from "./i18n.js";
+import { startLevel, computeXP, levelFrom, tierOf, fmtN, cardHtml, viewHtml, evLabel, evKey } from "./levels.js";
 
 var COLORS = ["blue", "red", "green", "amber", "violet"];
 var ICON = {
@@ -34,7 +35,7 @@ export function mountClient(root, ctx) {
 
   /* ---------- sections ---------- */
   function hasContent(k) {
-    if (k === "today" || k === "progress") return true;
+    if (k === "today" || k === "progress" || k === "levels") return true;
     if (k === "training") return WORKOUTS.length > 0;
     if (k === "nutrition") return RH_KEYS.some(function (r) { return (RH[r].meals || []).length; }) || Object.keys(REC).length > 0 || !!(P.shopping && (P.shopping.items || []).length);
     if (k === "calendar") return !!((P.calendar && Object.keys(P.calendar).length) || (P.weekTemplate && Object.keys(P.weekTemplate).length));
@@ -48,6 +49,7 @@ export function mountClient(root, ctx) {
   }
   var TABS = ["training", "nutrition", "today", "calendar", "progress"].filter(function (k) { return k === "today" || on(k); });
   var showPlan = on("rules") || on("supplements");
+  var LVON = on("levels");
 
   /* ---------- day logic ---------- */
   // Dan po planu trenera (weekTemplate + calendar), bez izbora klijenta.
@@ -182,13 +184,15 @@ export function mountClient(root, ctx) {
   }
   root.innerHTML =
     (ctx.readonly ? '<div class="preview-bar"><span>' + esc(t("preview_banner")) + '</span><button type="button" class="btn small" id="cExitPreview">' + esc(t("exit_preview")) + "</button></div>" : "") +
-    '<header class="top"><div class="wrap"><div class="brand">' + brandHtml(ctx.appName) + '</div><div class="top-r"><span id="hdrDate" class="hdr-date"></span>' +
+    '<header class="top' + (LVON ? " has-lvl" : "") + '"><div class="wrap"><div class="brand">' + brandHtml(ctx.appName) + '</div><div class="top-r"><span id="hdrDate" class="hdr-date"></span>' +
     (showPlan ? '<button type="button" class="icon-btn" id="cPlanBtn" aria-label="' + esc(t("plan_btn")) + '">' + ICON.plan + "<span>" + esc(t("plan_btn")) + "</span></button>" : "") +
     (ctx.extraHeaderBtn || "") +
+    (LVON ? '<button type="button" class="lvl-pill" id="cLvlPill" aria-label="' + esc(t("lv_open")) + '" hidden><span class="mini" id="cLvlMini"></span><span id="cLvlN">' + esc(t("lv_lvl")) + "</span></button>" : "") +
     '<button type="button" class="icon-btn round" id="cSettingsBtn" aria-label="' + esc(t("settings")) + '" title="' + esc(t("settings")) + '">' + ICON.settings + "</button></div></div></header>" +
     '<main class="wrap" id="cMain">' +
     '<section id="v-danas" class="view">' +
       '<div id="hero" class="card hero"><p class="muted">' + esc(t("loading")) + "</p></div>" +
+      (LVON ? '<div id="lvlCard" class="card lvl-card" role="button" tabindex="0" aria-label="' + esc(t("lv_open")) + '" hidden></div>' : "") +
       '<div id="weekCard" class="card wp-prompt" hidden></div>' +
       '<div id="installCard" class="card" hidden></div>' +
       '<div id="checkin" class="card" hidden></div>' +
@@ -202,11 +206,14 @@ export function mountClient(root, ctx) {
     '<section id="v-plan" class="view" hidden></section>' +
     '<section id="v-settings" class="view" hidden></section>' +
     '<section id="v-week" class="view" hidden></section>' +
+    '<section id="v-levels" class="view" hidden></section>' +
     "</main>" +
+    (LVON ? '<div id="xpToast" role="status" aria-live="polite"></div>' +
+      '<div id="lvlUp" class="lvlup" role="dialog" aria-modal="true" aria-labelledby="lvlUpT" hidden><div class="box"><span class="label">' + esc(t("lv_up")) + '</span><div class="lvl-ring big" style="--p:1"><span id="lvlUpN"></span></div><h2 id="lvlUpT"></h2><p class="muted small" id="lvlUpS"></p><button type="button" class="btn" id="lvlUpOk">' + esc(t("lv_continue")) + "</button></div></div>" : "") +
     (TABS.length > 1 ? '<nav class="tabs" aria-label="' + esc(t("tab_today")) + '"><div class="inner" style="grid-template-columns:repeat(' + TABS.length + ',minmax(0,1fr))">' + TABS.map(tabBtn).join("") + "</div></nav>" : "");
   document.body.classList.toggle("no-tabs", TABS.length <= 1);
 
-  var VIEWS = ["danas", "training", "nutrition", "calendar", "progress", "plan", "settings", "week"];
+  var VIEWS = ["danas", "training", "nutrition", "calendar", "progress", "plan", "settings", "week", "levels"];
   function go(view) {
     if (VIEWS.indexOf(view) < 0) view = "danas";
     if (view === "week" && !S.wp) view = "danas";
@@ -214,16 +221,25 @@ export function mountClient(root, ctx) {
     if (view === "nutrition" && !on("nutrition")) view = "danas";
     if (view === "calendar" && !on("calendar")) view = "danas";
     if (view === "plan" && !showPlan) view = "danas";
+    if (view === "levels" && !LVON) view = "danas";
     S.view = view;
     VIEWS.forEach(function (v) { var el = $("v-" + v); if (el) el.hidden = v !== view; });
     qsa(".tabs button", root).forEach(function (b) { if (b.dataset.view === view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
     window.scrollTo(0, 0);
     if (view === "calendar") { S.calScrolled = false; setTimeout(scrollCal, 0); }
     if (view === "settings") renderSettingsView();
+    if (view === "levels") renderLevelsView();
   }
   qsa(".tabs button", root).forEach(function (b) { b.addEventListener("click", function () { go(b.dataset.view); }); });
   if ($("cPlanBtn")) $("cPlanBtn").addEventListener("click", function () { go(S.view === "plan" ? "danas" : "plan"); });
   $("cSettingsBtn").addEventListener("click", function () { go(S.view === "settings" ? "danas" : "settings"); });
+  if (LVON) {
+    $("cLvlPill").addEventListener("click", function () { go(S.view === "levels" ? "danas" : "levels"); });
+    $("lvlCard").addEventListener("click", function () { go("levels"); });
+    $("lvlCard").addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go("levels"); } });
+    $("lvlUpOk").addEventListener("click", function () { $("lvlUp").hidden = true; });
+    $("lvlUp").addEventListener("click", function (e) { if (e.target === $("lvlUp")) $("lvlUp").hidden = true; });
+  }
   if ($("cExitPreview")) $("cExitPreview").addEventListener("click", function () { if (ctx.onExitPreview) ctx.onExitPreview(); });
 
   /* ---------- writes ---------- */
@@ -348,6 +364,7 @@ export function mountClient(root, ctx) {
     $("notesBox").innerHTML = notes.map(function (n) { return '<div class="note"><span class="when">' + esc(n.date ? fmtShortDate(parseYmd(n.date)) : "") + "</span><p>" + esc(n.text) + "</p></div>"; }).join("");
     renderInstall();
     renderCheckin();
+    renderLevel();
   }
   root.addEventListener("click", function (e) {
     var eb = e.target.closest && e.target.closest("[data-easy]");
@@ -373,7 +390,7 @@ export function mountClient(root, ctx) {
   /* ---------- install ---------- */
   function renderInstall() {
     var el = $("installCard");
-    if (isStandalone() || lsGet("rekomp-install-hidden") || ctx.readonly) { el.hidden = true; return; }
+    if (isStandalone() || lsGet("rekomp-install-hidden") || ctx.readonly || ctx.api.mode === "artifact") { el.hidden = true; return; }
     el.hidden = false;
     el.innerHTML = '<div class="card-h"><h3>' + esc(t("install_title")) + '</h3><button type="button" class="linkbtn" id="instHide">' + esc(t("hide")) + "</button></div>" +
       '<p class="small">' + esc(isIOS() ? t("install_ios") : t("install_android")) + "</p>" +
@@ -541,6 +558,7 @@ export function mountClient(root, ctx) {
       await ctx.api.saveSession(ctx.clientId, date, code, body);
       S.sessions[key] = Object.assign({ date: date, workout: code }, body);
       $("trStatus").textContent = t("saved_at", { time: nowHM() }); S.trDirty = false; lsDel("rekomp-draft-" + ctx.clientId + "-" + key);
+      renderLevel();
     } catch (err) { $("trStatus").textContent = t("not_saved"); }
     writing = false;
     if (pending) { pending = false; flushSession(false); }
@@ -1032,6 +1050,55 @@ export function mountClient(root, ctx) {
     go(h || "danas");
   }
 
+
+  /* ---------- nivo i XP ---------- */
+  // Računa se iz unosa (levels.js); obaveštenje „+XP“ samo kad XP poraste posle unosa, ne pri učitavanju.
+  var LV = { ready: false, last: null, lvl: null, start: null, evs: null, toastT: null, R: null };
+  S.intakeAns = ctx.intake ? (ctx.intake.answers || {}) : undefined;
+  function lvFrom() {
+    var f = P.start || null;
+    Object.keys(S.daily).forEach(function (d) { if (!f || d < f) f = d; });
+    Object.keys(S.sessions).forEach(function (k) { var d = S.sessions[k] && S.sessions[k].date; if (d && (!f || d < f)) f = d; });
+    return f;
+  }
+  function lvState() {
+    var st = startLevel(S.intakeAns || {});
+    var X = computeXP({ from: lvFrom(), today: activeDay(), daily: S.daily, sessions: S.sessions, ci: CI, nutrition: on("nutrition"), training: on("training"),
+      extras: EXTRAS.map(function (x) { return "x_" + x[0]; }), mealsFor: mealsFor, trainOf: trainOf, setsOf: setsOf, sessionDone: sessionDone, title: wTitle,
+      exercises: function (code) { return WK[code] ? WK[code].exercises || [] : []; } });
+    return { st: st, X: X, L: levelFrom(st.level, X.total) };
+  }
+  function lvToast(html) {
+    var el = $("xpToast"); el.innerHTML = html; el.classList.add("show");
+    clearTimeout(LV.toastT); LV.toastT = setTimeout(function () { el.classList.remove("show"); }, 2600);
+  }
+  function lvUp(L) {
+    $("lvlUpN").textContent = L.level; $("lvlUpT").textContent = t("lv_up_title", { n: L.level, tier: tierOf(L.level) });
+    $("lvlUpS").textContent = t("lv_up_sub", { x: fmtN(L.need - L.into) }); $("lvlUp").hidden = false; $("lvlUpOk").focus();
+  }
+  function renderLevel() {
+    if (!LVON) return;
+    if (!S.loaded || S.intakeAns === undefined) { $("lvlCard").hidden = true; return; }
+    var R = lvState(), X = R.X, L = R.L; LV.R = R;
+    $("cLvlPill").hidden = false; $("cLvlN").textContent = t("lv_lvl") + " " + L.level; $("cLvlMini").style.setProperty("--p", L.p.toFixed(3));
+    $("cLvlPill").setAttribute("aria-label", t("lv_pill_aria", { n: L.level, a: fmtN(L.into), b: fmtN(L.need) }));
+    $("lvlCard").hidden = false; $("lvlCard").innerHTML = cardHtml(R);
+    var nowEv = (X.ev[X.today] || []).map(evKey);
+    if (LV.ready && !ctx.readonly && LV.start === R.st.level && LV.last != null && X.total > LV.last) {
+      var prev = (LV.evs || []).slice(), fresh = [];
+      (X.ev[X.today] || []).forEach(function (e) { var i = prev.indexOf(evKey(e)); if (i >= 0) prev.splice(i, 1); else fresh.push(evLabel(e)); });
+      lvToast("<b>+" + esc(fmtN(X.total - LV.last)) + " XP</b> · " + esc(fresh.length ? fresh.slice(0, 3).join(" · ") : t("lv_bravo")));
+      if (LV.lvl != null && L.level > LV.lvl) lvUp(L);
+    }
+    LV.ready = true; LV.last = X.total; LV.lvl = L.level; LV.start = R.st.level; LV.evs = nowEv;
+    if (S.view === "levels") renderLevelsView();
+  }
+  function renderLevelsView() {
+    var v = $("v-levels"); if (!LVON) return;
+    if (!S.loaded || S.intakeAns === undefined) { v.innerHTML = '<div class="card"><p class="muted">' + esc(t("loading")) + "</p></div>"; return; }
+    v.innerHTML = viewHtml(LV.R || lvState(), { ci: CI, nutrition: on("nutrition"), training: on("training") });
+  }
+
   /* ---------- start ---------- */
   function renderAll() {
     renderDanas(); renderWeekCard(); renderWeek(); renderCal(); renderProgress(); renderPlan();
@@ -1053,6 +1120,7 @@ export function mountClient(root, ctx) {
       var sm = {}; (s || []).forEach(function (r) { sm[r.day + "_" + r.workout] = Object.assign({}, r.data, { date: r.day, workout: r.workout }); });
       Object.keys(S.daily).forEach(function (k) { if (!dm[k]) dm[k] = S.daily[k]; });
       S.daily = dm; S.sessions = sm; S.loaded = true;
+      if (LVON && S.intakeAns === undefined) { try { var it = await ctx.api.getIntake(ctx.clientId); S.intakeAns = (it && it.answers) || {}; } catch (e3) { S.intakeAns = {}; } }
       // Nedeljni izbori klijenta; ako tabela još ne postoji u bazi, aplikacija radi po planu.
       try {
         var w = await ctx.api.listWeeks(ctx.clientId), wm = {};

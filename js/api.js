@@ -16,6 +16,7 @@ function mapAuthError(e) {
 }
 
 export function createApi(cfg) {
+  if (cfg && cfg.artifact) return artApi(cfg);
   if (cfg && cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase && window.supabase.createClient) return supaApi(cfg);
   return demoApi();
 }
@@ -216,6 +217,91 @@ function supaApi(cfg) {
     }
     return out;
   }
+}
+
+/* ======================= Claude artefakt ======================= */
+// Probna verzija u Claude artefaktu (trenerov lični plan): jedan korisnik, bez prijave,
+// podaci u bazi artefakta (claude.use("db")). Kolekcije: <p>meta (plan, client, intake, settings),
+// <p>daily, <p>sessions, <p>weeks; <p> je "rk_" da se ne mešaju sa starim podacima artefakta.
+function artApi(cfg) {
+  var PFX = cfg.artifactPrefix || "rk_", ME = "me", dbP = null;
+  function db() {
+    if (dbP) return dbP;
+    dbP = new Promise(function (res, rej) {
+      var c = window.claude;
+      if (!c || typeof c.use !== "function") { rej(err("no_db", NO_DB)); return; }
+      var to = setTimeout(function () { rej(err("no_db", NO_DB)); }, 15000);
+      Promise.resolve(c.use("db")).then(function (d) { clearTimeout(to); if (d) res(d); else rej(err("no_db", NO_DB)); },
+        function (e) { clearTimeout(to); rej(err("no_db", (e && e.message) || NO_DB)); });
+    });
+    dbP.catch(function () { dbP = null; });   // sledeći poziv pokušava ponovo
+    return dbP;
+  }
+  var NO_DB = "Baza artefakta nije dostupna. Otvori stranicu na claude.ai dok si prijavljen.";
+  function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
+  function nowIso() { return new Date().toISOString(); }
+  function dbErr(e) { return e && e.code === "no_db" ? e : err((e && e.code) || "db", (e && e.message) || String(e)); }
+  async function getDoc(path) { try { var s = await (await db()).doc(PFX + path).get(); return s.exists ? s.data() : null; } catch (e) { throw dbErr(e); } }
+  async function setDoc(path, data) { try { await (await db()).doc(PFX + path).set(clone(data)); } catch (e) { throw dbErr(e); } }
+  async function listCol(col) {
+    try { var s = await (await db()).collection(PFX + col).get(); return s.docs.filter(function (d) { return d.exists; }).map(function (d) { return { id: d.id, data: d.data() }; }); }
+    catch (e) { throw dbErr(e); }
+  }
+  function guard(cid) { if (cid !== ME) throw err("forbidden"); }
+  var unsupported = function () { return Promise.reject(err("unsupported")); };
+  // Jedan upis u isti dokument u isto vreme (pravilo baze artefakta).
+  var docQ = {};
+  function queued(path, fn) { var run = (docQ[path] || Promise.resolve()).catch(function () {}).then(fn); docQ[path] = run; return run; }
+
+  return {
+    mode: "artifact",
+    async session() { return { user: { id: ME } }; },
+    onAuth() { /* nema prijave */ },
+    async signIn() { return { user: { id: ME } }; },
+    async signUp() { throw err("unsupported"); },
+    async signOut() { /* nema odjave u artefaktu */ },
+    async resetPassword() { throw err("unsupported"); },
+    updatePassword: unsupported,
+    async whoami() { return { userId: ME, email: null, isAdmin: false, clientId: ME }; },
+    async claimInvite() { return ME; },
+    async setMyLang(l) { var c = (await getDoc("meta/client")) || {}; c.lang = l; return queued("meta/client", function () { return setDoc("meta/client", c); }); },
+
+    async getClient(id) { guard(id); var c = await getDoc("meta/client"); return Object.assign({ id: ME, name: "", lang: "sr", sections: {} }, c || {}, { id: ME }); },
+    async getIntake(cid) { guard(cid); return clone(await getDoc("meta/intake")); },
+    async saveIntake(cid, patch) {
+      guard(cid);
+      return queued("meta/intake", async function () {
+        var cur = (await getDoc("meta/intake")) || { client_id: ME, answers: {}, progress: {}, submitted_at: null };
+        var touched = ("answers" in patch) || ("progress" in patch) || ("submitted_at" in patch);
+        cur = Object.assign(cur, clone(patch)); if (touched) cur.updated_at = nowIso();
+        await setDoc("meta/intake", cur); return clone(cur);
+      });
+    },
+    async getPlan(cid) { guard(cid); var p = await getDoc("meta/plan"); return p ? { client_id: ME, data: p.data || {}, published: p.published !== false, updated_at: p.updated_at || null } : null; },
+    // Claude menja plan iz razgovora (rk_meta/plan); otvorena stranica to vidi bez ponovnog učitavanja.
+    onPlanChange(cb) {
+      var last;
+      db().then(function (d) {
+        d.doc(PFX + "meta/plan").onSnapshot(function (s) {
+          var u = s.exists ? (s.data() || {}).updated_at || "" : "";
+          if (last !== undefined && u !== last) cb(); last = u;
+        }, function () { /* bez obaveštenja; plan se vidi pri sledećem otvaranju */ });
+      }, function () {});
+    },
+    async listDaily(cid) { guard(cid); return (await listCol("daily")).sort(function (a, b) { return a.id.localeCompare(b.id); }).map(function (d) { return { day: d.id, data: d.data }; }); },
+    async saveDaily(cid, day, data) { guard(cid); await queued("daily/" + day, function () { return setDoc("daily/" + day, data); }); return { day: day }; },
+    async listWeeks(cid) { guard(cid); return (await listCol("weeks")).map(function (d) { return { week: d.id, days: (d.data || {}).days || {} }; }); },
+    async saveWeek(cid, week, days) { guard(cid); await queued("weeks/" + week, function () { return setDoc("weeks/" + week, { days: days }); }); return { week: week }; },
+    async listSessions(cid) { guard(cid); return (await listCol("sessions")).map(function (d) { return d.data; }).filter(function (x) { return x && x.day && x.workout; }); },
+    async saveSession(cid, day, workout, data) {
+      guard(cid); var k = "sessions/" + day + "_" + workout;
+      await queued(k, function () { return setDoc(k, { day: day, workout: workout, data: data, updated_at: nowIso() }); }); return { day: day };
+    },
+    async getMySettings() { return clone((await getDoc("meta/settings")) || {}); },
+    async saveMySettings(data) { await queued("meta/settings", function () { return setDoc("meta/settings", data); }); },
+    async getAppSetting() { return null; },
+    savePushSub: unsupported, deletePushSub: unsupported, testReminder: unsupported
+  };
 }
 
 /* ======================= Demo (localStorage) ======================= */

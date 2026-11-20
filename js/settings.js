@@ -54,7 +54,7 @@ export async function disablePush(api) {
 // Posle otvaranja aplikacije: ako je dozvola data, pretplata postoji i važi za trenutni ključ (jednom dnevno javi bazi).
 export async function ensurePush(api, settings) {
   try {
-    if (api.mode === "demo" || !(settings && settings.notif && settings.notif.on)) return;
+    if (api.mode === "demo" || api.mode === "artifact" || !(settings && settings.notif && settings.notif.on)) return;
     var env = pushEnv(); if (!env.supported || env.permission !== "granted") return;
     var cfg = await api.getAppSetting("push"); if (!cfg || !cfg.publicKey) return;
     var reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
@@ -95,8 +95,8 @@ function pwHtml() {
     '<div class="field"><label for="pw2">' + esc(t("new_pw2")) + '</label><input id="pw2" type="password" autocomplete="new-password" minlength="8"></div>' +
     '<p id="pwErr" class="form-err" role="alert" hidden></p><div class="actions"><button type="submit" class="btn small" id="pwBtn">' + esc(t("new_pw_btn")) + "</button></div></form></details>";
 }
-function aboutCard() {
-  var inst = isStandalone() ? "" : '<p class="small"><b>' + esc(t("install_help")) + '</b></p><p class="small">Android: ' + esc(t("install_android")) + '</p><p class="small">iPhone: ' + esc(t("install_ios")) + "</p>";
+function aboutCard(art) {
+  var inst = isStandalone() || art ? "" : '<p class="small"><b>' + esc(t("install_help")) + '</b></p><p class="small">Android: ' + esc(t("install_android")) + '</p><p class="small">iPhone: ' + esc(t("install_ios")) + "</p>";
   return card(t("set_about"), inst + '<p class="small muted">' + esc(t("version", { v: APP_VERSION })) + '</p><div class="actions"><button type="button" class="btn ghost small" id="pUpdate">' + esc(t("check_update")) + "</button></div>" +
     '<p class="small set-legal" id="pLegal">' + legalLink("privacy") + " · " + legalLink("terms") + " · " + legalLink("about") + "</p>");
 }
@@ -115,6 +115,7 @@ function kindsHtml(kinds, prefs) {
 //      onSettings(data), onLang(l), onLogout(), onEditIntake(), exportData() → objekat, cfg }
 export function renderSettings(el, o) {
   var S = { data: Object.assign({}, o.settings || {}), contact: null, push: null, sub: null, busy: false };
+  var art = o.api.mode === "artifact";
   var kinds = o.kinds || (o.role === "admin" ? ADMIN_KINDS : CLIENT_KINDS);
   var prefs = notifPrefs(S.data, kinds);
 
@@ -205,6 +206,7 @@ export function renderSettings(el, o) {
   }
 
   function accountCard() {
+    if (art) return o.onEditIntake ? card(t("set_account"), '<p class="small muted">' + esc(t("art_account")) + '</p><div class="actions"><button type="button" class="btn ghost small" id="pIntake">' + esc(t("my_answers")) + "</button></div>") : "";
     var h = (o.me && o.me.email ? '<p class="small muted">' + esc(t("signed_in_as", { x: o.me.email })) + "</p>" : "") + pwHtml();
     if (o.role === "client") {
       h += '<div class="actions">' + (o.onEditIntake ? '<button type="button" class="btn ghost small" id="pIntake">' + esc(t("my_answers")) + "</button>" : "") +
@@ -223,7 +225,7 @@ export function renderSettings(el, o) {
     var name = o.role === "client" && o.client ? '<p class="muted">' + esc(o.client.name) + "</p>" : "";
     var dbWarn = o.role === "admin" && S.dbMissing ? '<p class="form-err small" id="setDbMissing">' + esc(t("set_missing_db")) + "</p>" : "";
     el.innerHTML = '<div class="card">' + (o.back || "") + "<h2>" + esc(t("settings")) + "</h2>" + name + dbWarn + "</div>" +
-      notifCard() + (o.role === "admin" ? keysCard() + backupCard() + contactForm() : contactCard()) + themeCard() + langCard() + accountCard() + aboutCard();
+      (art ? "" : notifCard() + (o.role === "admin" ? keysCard() + backupCard() + contactForm() : contactCard())) + themeCard() + langCard() + accountCard() + aboutCard(art);
     bind();
   }
 
@@ -234,7 +236,7 @@ export function renderSettings(el, o) {
       save({ theme: v });
     }); });
     $("pLang").addEventListener("change", function () { if (o.onLang) o.onLang($("pLang").value); });
-    $("pLogout").addEventListener("click", function () { if (o.onLogout) o.onLogout(); });
+    if ($("pLogout")) $("pLogout").addEventListener("click", function () { if (o.onLogout) o.onLogout(); });
     if ($("pIntake")) $("pIntake").addEventListener("click", function () { o.onEditIntake(); });
     if ($("pExport")) $("pExport").addEventListener("click", async function () {
       $("pExport").disabled = true;
@@ -248,7 +250,7 @@ export function renderSettings(el, o) {
       try { var reg = await swReg(); if (reg) await reg.update(); } catch (e) { /* ignore */ }
       location.reload();
     });
-    $("pwForm").addEventListener("submit", async function (e) {
+    if ($("pwForm")) $("pwForm").addEventListener("submit", async function (e) {
       e.preventDefault();
       var a = $("pw1").value, b = $("pw2").value, er = $("pwErr");
       er.hidden = true;

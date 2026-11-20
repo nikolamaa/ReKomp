@@ -166,6 +166,10 @@ Uputstvo za instalaciju je i u samoj aplikaciji (Podešavanja → O aplikaciji) 
 
 **Rezervna kopija.** Besplatan Supabase nema automatske kopije. Šifrovana kopija stiže mejlom svakog ponedeljka (korak 8). Ručno: u panelu **Rezervna kopija** preuzima nešifrovan fajl (sadrži zdravstvene podatke klijenata, čuvaj ga kao poverljiv i obriši kad ti ne treba).
 
+**Nivo i XP.** Klijent na kartici Danas vidi svoj nivo, a dodirom otvara detalje: XP danas i ove nedelje, grafik za 14 dana, bedževe, rekorde i pravila. XP se računa iz unosa koje već pravi (jutarnji unos i niz bez preskakanja, san, obroci i proteini, voda/koraci/suplementi, treninzi, napredak i rekordi na vežbama, nedeljni bonusi). Vaga ne donosi XP i ništa se ne oduzima. Početni nivo (1–15) dolazi iz upitnika: koliko dugo trenira, da li sada trenira, samoprocena, kondicija i pauza. Ništa se posebno ne čuva u bazi, pa je isti XP na svakom telefonu. Isključuje se po klijentu na kartici **Sekcije** (Nivo i XP).
+
+**Probna verzija u Claude artefaktu.** `node tools/build-artifact.mjs ReComp.html` (treba `npm i esbuild`) pravi jednu HTML stranu sa istim kodom i `artifact: true` u podešavanju: bez prijave i service workera, a podaci su u bazi artefakta (kolekcije `rk_meta` sa dokumentima `plan`, `client`, `intake`, `settings`, pa `rk_daily`, `rk_sessions`, `rk_weeks`). Plan je `rk_meta/plan` = `{ data: <plan>, published: true, updated_at }`; kad ga Claude promeni (i `updated_at`), otvorena stranica se sama osveži. Tako se nove funkcije prvo isprobaju na sopstvenom planu, pa tek onda idu na rekomp.me.
+
 **Aplikacija ne radi nekoliko dana.** Besplatan Supabase projekat se pauzira posle oko nedelju dana bez korišćenja. Sa klijentima koji svakodnevno unose podatke to se ne dešava. Ako se desi: Supabase → projekat → **Restore**. Podaci ostaju.
 
 ---
@@ -206,6 +210,8 @@ Ova aplikacija je PWA (web aplikacija koja se instalira sa sajta), pa ne treba A
 | `js/admin.js` | trenerski panel |
 | `js/settings.js` | Podešavanja i uključivanje notifikacija |
 | `js/insights.js` | pregled napretka i upozorenja za trenera |
+| `js/levels.js` | nivo i XP: početni nivo iz upitnika, XP iz unosa, bedževi i rekordi |
+| `tools/build-artifact.mjs` | pravi probnu verziju za Claude artefakt (jedna HTML strana) |
 | `js/plan-format.js` | provera plana i tekst za Claude |
 | `js/i18n.js` | prevodi (srpski, engleski, ruski) |
 | `js/api.js` | rad sa bazom i demo režim |

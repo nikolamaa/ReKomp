@@ -19,14 +19,16 @@ var state = { me: null, screen: null, preview: null, ownPlan: false, recovery: R
 function cleanHash() { try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* ignore */ } }
 
 setLang(detectLang());
-document.title = APP;
+// U Claude artefaktu (probna verzija) nema service workera ni instaliranja, a naziv kartice ostaje naziv artefakta.
+var ART = api.mode === "artifact";
+if (!ART) document.title = APP;
 
 window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); window.__bip = e; });
-if ("serviceWorker" in navigator && location.protocol === "https:") {
+if (!ART && "serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("./sw.js").catch(function () { /* ignore */ });
 }
 // Klik na notifikaciju dok je aplikacija otvorena: service worker javlja kuda da ide.
-if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", function (e) {
+if (!ART && "serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", function (e) {
   var d = e.data || {};
   if (d.type !== "open") return;
   var h = String(d.url || "").replace(/^[^#]*/, "");
@@ -196,7 +198,7 @@ function renderClient(client, plan, opts) {
   bindDemoBar();
   var c = mountClient($("cRoot"), {
     api: api, appName: APP, clientId: client.id, client: client, plan: plan, readonly: !!opts.readonly,
-    me: state.me, settings: state.settings, onSettings: function (d) { state.settings = d; },
+    me: state.me, settings: state.settings, onSettings: function (d) { state.settings = d; }, intake: opts.intake,
     extraHeaderBtn: opts.adminSwitch ? '<button type="button" class="icon-btn" id="toAdmin">' + esc(t("trainer")) + "</button>" : "",
     onEditIntake: async function () { var it = await api.getIntake(client.id); renderIntake(client, it, { back: true }); },
     onLogout: async function () { await api.signOut(); state.settingsLoaded = false; boot(); },
@@ -253,7 +255,7 @@ export async function boot(keepView) {
     if (!intake || !intake.submitted_at) { renderIntake(client, intake, me.isAdmin ? { back: true, toAdmin: true } : null); return; }
     var plan = await api.getPlan(me.clientId);
     if (!plan || !plan.published) { renderPending(client, me.isAdmin); return; }
-    renderClient(client, plan.data, { adminSwitch: me.isAdmin });
+    renderClient(client, plan.data, { adminSwitch: me.isAdmin, intake: intake });
   } catch (e) {
     root.innerHTML = '<main class="wrap"><div class="card"><p class="form-err">' + esc(t("error_generic")) + '</p><p class="small muted">' + esc(e && e.message || "") + '</p><div class="actions"><button class="btn" id="retry">' + esc(t("next")) + "</button></div></div></main>";
     $("retry").addEventListener("click", function () { boot(); });
@@ -263,6 +265,12 @@ export async function boot(keepView) {
 api.onAuth(function (ev) {
   if (ev === "SIGNED_OUT") { state.ownPlan = false; state.preview = null; }
   if (ev === "PASSWORD_RECOVERY" && !state.recovery) { state.recovery = true; boot(); }
+});
+// Artefakt: kad Claude promeni plan, otvorena stranica se osveži (posle kucanja, ne usred unosa).
+if (api.onPlanChange) api.onPlanChange(function () {
+  function typing() { var a = document.activeElement; return !!(a && a.closest && a.closest("input, textarea, select")); }
+  function run() { if (typing()) { document.addEventListener("focusout", function f() { document.removeEventListener("focusout", f); setTimeout(run, 300); }); return; } toast(t("plan_updated")); boot(true); }
+  run();
 });
 var lastHidden = 0;
 document.addEventListener("visibilitychange", function () {
