@@ -13,7 +13,7 @@ Hosting je besplatan: kod je na **GitHub Pages**, podaci u bazi **Supabase** (be
 3. Klijent popunjava **upitnik** (12 delova: saglasnost, osnovni podaci, ciljevi, zdravlje i PAR-Q, povrede i bol, iskustvo, vreme i oprema, posao/san/stres, ishrana i alergije, suplementi, merenja, kontakt). Odgovori se čuvaju automatski, pa može da prekine i nastavi kasnije. Deo koji ga ne zanima može da preskoči.
 4. Kad pošalje, klijent u listi dobija status **Upitnik stigao**. Odgovori sa „da“ u zdravstvenim pitanjima i ozbiljne alergije su označeni crveno.
 5. Na kartici **Upitnik** klikneš **Kopiraj za Claude**, nalepiš u Claude i dobiješ plan u JSON formatu.
-6. Na kartici **Plan** nalepiš JSON ili klikneš **📄 Učitaj iz fajla** i izabereš .txt/.json fajl, klikneš **Proveri** (aplikacija javi greške), pa **Sačuvaj nacrt** ili **Objavi**. Klijent vidi plan tek kad ga objaviš. Pre toga možeš **Pogledaj kao klijent**.
+6. Na kartici **Plan** nalepiš JSON ili klikneš **📄 Učitaj iz fajla** i izabereš .txt/.json fajl, klikneš **Proveri** (aplikacija javi greške; ako je uz plan ostao Claude-ov tekst ili ``` oznake, sama uzme samo plan), pa **Sačuvaj nacrt** ili **Objavi**. Klijent vidi plan tek kad ga objaviš. Pre toga možeš **Pogledaj kao klijent**.
 7. Na kartici **Sekcije** biraš šta klijent vidi. Aplikacija sama predloži sekcije za koje je klijent dao podatke (npr. ako je preskočio ishranu, nema sekcije Ishrana). Kasnije, kad dobiješ podatke, uključiš sekciju i dopuniš plan.
 8. Klijent svakodnevno unosi težinu, san, bol, struk, kilaže po serijama. Ti to vidiš na kartici **Unosi** (nedeljni proseci, dnevna tabela, treninzi).
 

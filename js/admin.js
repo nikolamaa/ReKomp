@@ -2,7 +2,7 @@
 import { $, qsa, esc, parseYmd, addDays, monday, num, f1, nowHM, copyText, toast, today, downloadText, GEAR } from "./util.js";
 import { t, tIn, getLang, fmtShortDate, fmtRange, inviteText, langSelectHtml, LANGS } from "./i18n.js";
 import { SECTIONS, tx, fieldVisible, displayValue, isFlagged, parqPositive, sectionAnswered, defaultSections } from "./intake.js";
-import { validatePlan, claudePrompt, initials } from "./plan-format.js";
+import { validatePlan, claudePrompt, initials, extractPlanJson } from "./plan-format.js";
 import { brandHtml } from "./client.js";
 import { computeInsights } from "./insights.js";
 import { renderSettings } from "./settings.js";
@@ -389,6 +389,7 @@ export function mountAdmin(root, ctx) {
     }
     function check() {
       var r = validatePlan($("pJson").value, { menus: S.menus || {} });
+      if (r.cleaned) $("pJson").value = r.cleaned;   // u polju ostaje samo plan, bez Claude-ovog teksta oko njega
       $("pCheck").innerHTML = r.ok ? '<div class="hint ok">' + esc(t("json_ok", { x: r.summary })) + "</div>" + (r.warnings.length ? '<div class="hint warn">' + r.warnings.map(esc).join("<br>") + "</div>" : "")
         : '<div class="hint bad">' + esc(t("json_err", { x: "" })) + "<br>" + r.errors.slice(0, 12).map(esc).join("<br>") + "</div>";
       return r;
@@ -405,9 +406,7 @@ export function mountAdmin(root, ctx) {
       if (!file) return;
       var rd = new FileReader();
       rd.onload = function () {
-        var txt = String(rd.result || "").replace(/^\uFEFF/, "").trim();
-        if (/^```/.test(txt)) txt = txt.replace(/^```[a-z]*\s*/i, "").replace(/\s*```\s*$/, "");
-        $("pJson").value = txt;
+        $("pJson").value = extractPlanJson(rd.result).json;
         var r = check();
         toast(t("file_loaded", { name: file.name }));
         $("pCheck").scrollIntoView({ behavior: "smooth", block: "center" });

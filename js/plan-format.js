@@ -53,10 +53,23 @@ export function checkWorkMenu(p, menus) {
   return out;
 }
 
+// Claude ponekad doda rečenicu ili ``` oznake oko plana: uzmi sam plan (JSON objekat) iz teksta.
+export function extractPlanJson(text) {
+  var s = String(text == null ? "" : text).replace(/^﻿/, "").trim();
+  function obj(x) { try { var v = JSON.parse(x); return v && typeof v === "object" && !Array.isArray(v); } catch (e) { return false; } }
+  if (!s || obj(s)) return { json: s, extracted: false };
+  var best = null, re = /```[a-z]*[ \t]*\r?\n?([\s\S]*?)```/gi, m;
+  while ((m = re.exec(s))) { var c = m[1].trim(); if (obj(c) && (!best || c.length > best.length)) best = c; }
+  if (!best) { var a = s.indexOf("{"), b = s.lastIndexOf("}"); if (a >= 0 && b > a && obj(s.slice(a, b + 1))) best = s.slice(a, b + 1); }
+  return best ? { json: best, extracted: true } : { json: s, extracted: false };
+}
+
 export function validatePlan(text, opts) {
-  var errors = [], warnings = [], p;
+  var errors = [], warnings = [], p, ex = null;
+  if (typeof text === "string") { ex = extractPlanJson(text); text = ex.json; }
   try { p = typeof text === "string" ? JSON.parse(text) : text; }
-  catch (e) { return { ok: false, errors: ["JSON: " + e.message], warnings: [], plan: null, summary: "" }; }
+  catch (e) { return { ok: false, errors: ["JSON: " + e.message, "Plan mora biti ceo, od prve { do poslednje }. Ako je Claude prekinuo odgovor na pola, zamoli ga da nastavi ili da plan pošalje kao fajl."], warnings: [], plan: null, summary: "" }; }
+  if (ex && ex.extracted) warnings.push("Iz teksta je uzet samo plan (JSON); rečenice i ``` oznake oko njega su preskočene.");
   if (!p || typeof p !== "object" || Array.isArray(p)) return { ok: false, errors: ["root must be an object {…}"], warnings: [], plan: null, summary: "" };
 
   Object.keys(p).forEach(function (k) { if (KNOWN.indexOf(k) < 0) warnings.push("unknown key: " + k); });
@@ -119,7 +132,7 @@ export function validatePlan(text, opts) {
   var nc = p.calendar ? Object.keys(p.calendar).length : 0; if (nc) parts.push(t("summary_days", { n: nc }));
   var nrec = Object.keys(recipes).length; if (nrec) parts.push(t("summary_recipes", { n: nrec }));
   if (Array.isArray(p.targets) && p.targets.length) parts.push(t("summary_targets", { n: p.targets.length }));
-  return { ok: !errors.length, errors: errors, warnings: warnings, plan: p, summary: parts.join(", ") || "—" };
+  return { ok: !errors.length, errors: errors, warnings: warnings, plan: p, summary: parts.join(", ") || "—", cleaned: ex && ex.extracted ? ex.json : null };
 }
 
 export var PLAN_FORMAT = [
