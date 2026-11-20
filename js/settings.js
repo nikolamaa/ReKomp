@@ -196,8 +196,9 @@ export function renderSettings(el, o) {
 
   function draw() {
     prefs = notifPrefs(S.data, kinds);
+    el.classList.add("view");   // kartice jedna ispod druge sa razmakom, bez obzira gde se crta (klijent ili trener)
     var name = o.role === "client" && o.client ? '<p class="muted">' + esc(o.client.name) + "</p>" : "";
-    el.innerHTML = '<div class="card"><h2>' + esc(t("settings")) + "</h2>" + name + "</div>" +
+    el.innerHTML = '<div class="card">' + (o.back || "") + "<h2>" + esc(t("settings")) + "</h2>" + name + "</div>" +
       notifCard() + (o.role === "admin" ? keysCard() + contactForm() : contactCard()) + themeCard() + langCard() + accountCard() + aboutCard();
     bind();
   }

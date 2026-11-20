@@ -93,8 +93,8 @@ export function mountAdmin(root, ctx) {
   function renderAdminSettings() {
     S.detail = null;
     var m = $("aMain");
-    m.innerHTML = '<div class="card"><a href="#/" class="linkbtn">‹ ' + esc(t("back_to_clients")) + '</a></div><div id="aSet"></div>';
-    renderSettings($("aSet"), {
+    renderSettings(m, {
+      back: '<a href="#/" class="linkbtn">‹ ' + esc(t("back_to_clients")) + "</a>",
       api: ctx.api, role: "admin", me: ctx.me, settings: ctx.settings, cfg: ctx.cfg,
       onSettings: ctx.onSettings, onLang: ctx.onLang, onLogout: ctx.onLogout
     });
